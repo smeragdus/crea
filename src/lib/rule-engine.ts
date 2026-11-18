@@ -20,16 +20,8 @@ import type {
 } from "./types";
 
 export const RULE_ENGINE_VERSION = CATALOG_VERSION;
-export const UIT_2026 = 5350;
-export const NRUS_MONTHLY_LIMIT_CAT1 = 5000;
-export const NRUS_MONTHLY_LIMIT_CAT2 = 8000;
-export const NRUS_ANNUAL_LIMIT = 96000;
-export const NRUS_ASSETS_LIMIT = 70000;
-export const RER_ANNUAL_INCOME_LIMIT = 525000;
-export const RER_ANNUAL_PURCHASES_LIMIT = 525000;
-export const RER_ASSETS_LIMIT = 126000;
-export const RER_WORKERS_PER_SHIFT_LIMIT = 10;
-export const RMT_INCOME_LIMIT_2026 = 1700 * UIT_2026;
+export { UIT_2026, NRUS_MONTHLY_LIMIT_CAT1, NRUS_MONTHLY_LIMIT_CAT2, NRUS_ANNUAL_LIMIT, NRUS_ASSETS_LIMIT, RER_ANNUAL_INCOME_LIMIT, RER_ANNUAL_PURCHASES_LIMIT, RER_ASSETS_LIMIT, RER_WORKERS_PER_SHIFT_LIMIT, RMT_INCOME_LIMIT_2026 } from "./tax-constants";
+import { NRUS_MONTHLY_LIMIT_CAT2, NRUS_ANNUAL_LIMIT, NRUS_ASSETS_LIMIT, RER_ANNUAL_INCOME_LIMIT, RER_ANNUAL_PURCHASES_LIMIT, RER_ASSETS_LIMIT, RER_WORKERS_PER_SHIFT_LIMIT, RMT_INCOME_LIMIT_2026 } from "./tax-constants";
 
 const VALID_RESTAURANT_ACTIVITIES = [
   "restaurante",
@@ -128,7 +120,7 @@ function buildRuleItem(
     sourceId: detail?.sourceId || "sunat-regimes",
     sourceUrl:
       src?.url ||
-      "https://emprender.sunat.gob.pe/tributando/regimenes-tributarios/conocelos",
+      "https://www.gob.pe/institucion/sunat/pages/280-regimenes-tributarios",
     effectiveDate: detail?.effectiveDate || "2026-01-01",
     reviewedAt: detail?.reviewedAt || "2026-10-15",
     version: String(detail?.version || "2026.1"),
@@ -161,7 +153,8 @@ export class RuleEngine {
 
   static evaluate(
     context: BusinessContext,
-    catalog?: CatalogData
+    catalog?: CatalogData,
+    diagnosticDate?: string
   ): FullWorkspaceEvaluation;
   static evaluate(
     context: BusinessContext,
@@ -172,15 +165,16 @@ export class RuleEngine {
   static evaluate(
     context: BusinessContext,
     rulesOrCatalog: Rule[] | CatalogData = seedCatalog,
-    sourcesArg?: Source[],
-    diagnosticDate = "2026-10-15"
+    sourcesArg?: Source[] | string,
+    legacyDiagnosticDate = "2026-10-15"
   ): AppliedRequirement[] | FullWorkspaceEvaluation {
+    const diagnosticDate = typeof sourcesArg === "string" ? sourcesArg : legacyDiagnosticDate;
     const isArrayCall = Array.isArray(rulesOrCatalog);
     const rulesList = isArrayCall
       ? rulesOrCatalog
       : rulesOrCatalog.rules || seedCatalog.rules;
     const sourcesList = isArrayCall
-      ? sourcesArg || defaultSources
+      ? (Array.isArray(sourcesArg) ? sourcesArg : defaultSources)
       : rulesOrCatalog.sources || seedCatalog.sources;
 
     const picked = new Map<string, AppliedRequirement>();
@@ -248,14 +242,16 @@ export class RuleEngine {
     const hasAnswer = (key: string) =>
       !answers || Boolean(String(answers[key] ?? "").trim());
 
-    const monthlyRev = context.monthlyRevenue;
-    const exactSales =
+    const strict = context.assessmentVersion === 2;
+    const monthlyRev = strict ? context.maxMonthlyRevenue : context.monthlyRevenue;
+    const exactSales = strict ? context.annualRevenue !== undefined : (
       monthlyRev !== undefined &&
       monthlyRev > 0 &&
       (!answers ||
         !answers.P20 ||
         String(answers.P20 || "").startsWith("monto:") ||
-        Boolean(answers.MONTHLY_SALES));
+        Boolean(answers.MONTHLY_SALES))
+    );
 
     const activityId = context.activityId || "restaurante";
     const sectorId = context.sectorId || "restaurantes";
@@ -265,33 +261,35 @@ export class RuleEngine {
     const activityKnown = Boolean(context.activityId || context.ciiu);
 
     const annualIncome =
-      context.annualRevenue !== undefined && context.annualRevenue > 0
+      context.annualRevenue !== undefined && (strict || context.annualRevenue > 0)
         ? context.annualRevenue
         : (monthlyRev ?? 0) * 12;
 
-    const monthlyPurch =
+    const monthlyPurch = strict ? context.maxMonthlyPurchases : (
       context.monthlyPurchases ??
       (context.monthlyPurchasesWithInvoice !== undefined
         ? context.monthlyPurchasesWithInvoice +
           (context.monthlyPurchasesWithoutInvoice ?? 0)
-        : undefined);
+        : undefined)
+    );
 
     const annualPurchases =
-      context.annualPurchases !== undefined && context.annualPurchases > 0
+      context.annualPurchases !== undefined && (strict || context.annualPurchases > 0)
         ? context.annualPurchases
         : (monthlyPurch ?? 0) * 12;
 
-    const purchasesProvided =
+    const purchasesProvided = strict ? context.annualPurchases !== undefined : (
       monthlyPurch !== undefined &&
       hasAnswer("TAX_PURCHASES") &&
-      (monthlyPurch >= 0 || annualPurchases >= 0);
+      (monthlyPurch >= 0 || annualPurchases >= 0)
+    );
 
     const assetsVal = context.fixedAssetsValue ?? context.fixedAssets;
     const assetsProvided =
       assetsVal !== undefined && hasAnswer("TAX_ASSETS") && assetsVal >= 0;
 
     const estabCount =
-      context.establishmentCount ?? (context.hasMultipleLocations ? 2 : 1);
+      context.establishmentCount ?? (strict ? undefined : context.hasMultipleLocations ? 2 : 1);
 
     const workersPerShift =
       context.employees ?? context.employeeCountPerShift;
@@ -380,7 +378,7 @@ export class RuleEngine {
         failedRules: failures,
         missingFields: allMissing,
         sourceId: regimeSourceId,
-        ruleVersion: 2,
+        ruleVersion: 3,
         effectiveFrom: "2026-01-01",
         lastVerifiedAt: "2026-10-15",
         verification,
@@ -405,6 +403,17 @@ export class RuleEngine {
       );
     }
 
+    const nrusIncomeBreached =
+      ((!strict || context.annualRevenue !== undefined) && annualIncome > NRUS_ANNUAL_LIMIT) ||
+      (monthlyRev ?? 0) > NRUS_MONTHLY_LIMIT_CAT2;
+    const nrusPurchasesBreached =
+      ((!strict || context.annualPurchases !== undefined) && annualPurchases > NRUS_ANNUAL_LIMIT) ||
+      (monthlyPurch ?? 0) > NRUS_MONTHLY_LIMIT_CAT2;
+    const nrusSalesKnown = exactSales && (!strict || monthlyRev !== undefined);
+    const nrusPurchasesKnown = purchasesProvided && (!strict || monthlyPurch !== undefined);
+    const rmtExcluded = context.hasCorporateLinkageOverLimit === true || context.isForeignBranch === true;
+    const rmtExclusionsKnown = !strict || (context.hasCorporateLinkageOverLimit === false && context.isForeignBranch === false);
+
     // 1. NUEVO RUS (NRUS)
     const nrusRules: TaxRuleEvaluationItem[] = [
       ...nonRestaurantFailure,
@@ -419,34 +428,24 @@ export class RuleEngine {
       ),
       buildRuleItem(
         "TR-NRUS-02",
-        !exactSales
-          ? null
-          : (monthlyRev ?? 0) <= NRUS_MONTHLY_LIMIT_CAT2 &&
-              annualIncome <= NRUS_ANNUAL_LIMIT,
-        !exactSales
-          ? "Falta registrar el monto de ventas mensuales o anuales del restaurante."
-          : (monthlyRev ?? 0) > NRUS_MONTHLY_LIMIT_CAT2 ||
-              annualIncome > NRUS_ANNUAL_LIMIT
-            ? `Incompatible: Las ventas declaradas (S/ ${(monthlyRev ?? 0).toLocaleString("es-PE")}/mes · S/ ${annualIncome.toLocaleString("es-PE")}/año) superan el límite del Nuevo RUS (S/ 8,000/mes o S/ 96,000/año).`
-            : `Cumple límite de ingresos del Nuevo RUS (S/ ${(monthlyRev ?? 0).toLocaleString("es-PE")}/mes).`
+        nrusIncomeBreached ? false : nrusSalesKnown ? true : null,
+        nrusIncomeBreached
+          ? "Las ventas declaradas superan S/ 8 000 en algún mes o S/ 96 000 en el año."
+          : nrusSalesKnown ? "Las ventas están dentro de los topes mensual y anual."
+          : "Faltan las ventas anuales o las del mes con más ventas."
       ),
       buildRuleItem(
         "TR-NRUS-03",
-        !purchasesProvided
-          ? null
-          : (monthlyPurch ?? 0) <= NRUS_MONTHLY_LIMIT_CAT2 &&
-              annualPurchases <= NRUS_ANNUAL_LIMIT,
-        !purchasesProvided
-          ? "Falta registrar el monto de compras mensuales de insumos."
-          : (monthlyPurch ?? 0) > NRUS_MONTHLY_LIMIT_CAT2 ||
-              annualPurchases > NRUS_ANNUAL_LIMIT
-            ? `Incompatible: Las compras declaradas (S/ ${(monthlyPurch ?? 0).toLocaleString("es-PE")}/mes) superan el tope mensual de S/ 8,000 (S/ 96,000/año) del Nuevo RUS.`
-            : "Cumple límite de compras mensuales y anuales del Nuevo RUS."
+        nrusPurchasesBreached ? false : nrusPurchasesKnown ? true : null,
+        nrusPurchasesBreached
+          ? "Las compras declaradas superan S/ 8 000 en algún mes o S/ 96 000 en el año."
+          : nrusPurchasesKnown ? "Las compras están dentro de los topes mensual y anual."
+          : "Faltan las compras anuales o las del mes con más compras."
       ),
       buildRuleItem(
         "TR-NRUS-04",
-        needsInvoiceVal === null ? null : !emitsFactura,
-        needsInvoiceVal === null
+        emitsFactura ? false : needsInvoiceVal == null ? null : true,
+        !emitsFactura && needsInvoiceVal == null
           ? "Falta indicar si el restaurante necesita emitir facturas a empresas."
           : emitsFactura
             ? "Incompatible: El restaurante requiere o emite Facturas; el Nuevo RUS solo permite emitir Boletas de Venta y tickets."
@@ -454,8 +453,9 @@ export class RuleEngine {
       ),
       buildRuleItem(
         "TR-NRUS-05",
-        estabCount <= 1,
-        estabCount > 1
+        estabCount === undefined ? null : estabCount <= 1,
+        estabCount === undefined ? "Falta indicar el número de locales o unidades de operación."
+          : estabCount > 1
           ? `Incompatible: El restaurante registra ${estabCount} establecimientos; el Nuevo RUS solo permite 1 unidad de explotación.`
           : "Cumple: Opera en un (1) único establecimiento comercial."
       ),
@@ -477,7 +477,7 @@ export class RuleEngine {
         "TR-RER-01",
         !exactSales ? null : annualIncome <= RER_ANNUAL_INCOME_LIMIT,
         !exactSales
-          ? "Falta registrar las ventas mensuales o anuales del restaurante."
+          ? "Falta registrar el total anual de ventas del restaurante."
           : annualIncome > RER_ANNUAL_INCOME_LIMIT
             ? `Incompatible: Los ingresos anuales (S/ ${annualIncome.toLocaleString("es-PE")}) superan el tope de S/ 525,000 del RER.`
             : "Cumple: Ingresos netos anuales dentro del tope de S/ 525,000 del RER."
@@ -488,7 +488,7 @@ export class RuleEngine {
           ? null
           : annualPurchases <= RER_ANNUAL_PURCHASES_LIMIT,
         !purchasesProvided
-          ? "Falta registrar las compras mensuales de insumos del restaurante."
+          ? "Falta registrar el total anual de compras del restaurante."
           : annualPurchases > RER_ANNUAL_PURCHASES_LIMIT
             ? `Incompatible: Las compras anuales (S/ ${annualPurchases.toLocaleString("es-PE")}) superan el tope de S/ 525,000 del RER.`
             : "Cumple: Compras anuales de insumos dentro del tope de S/ 525,000."
@@ -522,21 +522,18 @@ export class RuleEngine {
         "TR-RMT-01",
         !exactSales ? null : annualIncome <= RMT_INCOME_LIMIT_2026,
         !exactSales
-          ? "Falta registrar las ventas mensuales o anuales para verificar el tope de 1,700 UIT."
+          ? "Falta registrar el total anual de ventas para verificar el tope de 1,700 UIT."
           : annualIncome > RMT_INCOME_LIMIT_2026
             ? `Incompatible: Los ingresos anuales (S/ ${annualIncome.toLocaleString("es-PE")}) superan las 1,700 UIT del RMT.`
             : `Cumple: Ingresos anuales (S/ ${annualIncome.toLocaleString("es-PE")}) dentro del límite de 1,700 UIT del RMT.`
       ),
       buildRuleItem(
         "TR-RMT-02",
-        !(
-          context.hasCorporateLinkageOverLimit === true ||
-          context.isForeignBranch === true
-        ),
-        context.hasCorporateLinkageOverLimit === true ||
-          context.isForeignBranch === true
-          ? "Incompatible: Presenta vinculación económica superior a 1,700 UIT o es sucursal de empresa extranjera."
-          : "Cumple: No presenta causales de exclusión por vinculación económica ni sucursal extranjera."
+        rmtExcluded ? false : rmtExclusionsKnown ? true : null,
+        rmtExcluded
+          ? "El negocio supera el límite con empresas vinculadas o es un establecimiento de una empresa extranjera."
+          : rmtExclusionsKnown ? "No se declaró vinculación por encima del límite ni establecimiento extranjero."
+          : "Falta confirmar si hay vinculación por encima del límite o si es un establecimiento extranjero."
       ),
     ];
 
@@ -612,22 +609,25 @@ export class RuleEngine {
       (item) => item.status === "INFORMACION_INSUFICIENTE"
     );
 
+    const alternativesCount = compatibleAlternatives.length;
+    const alternatives = alternativesCount === 1 ? "1 alternativa compatible" : alternativesCount + " alternativas compatibles";
     let summaryMessage = "";
     if (!currentEval) {
-      summaryMessage =
-        "Aún no has indicado el régimen tributario actual de tu restaurante. Revisa las alternativas legalmente compatibles según tus datos declarados.";
+      summaryMessage = declaredRegime === "SIN_REGIMEN"
+        ? "Declaraste que tu restaurante todavía no tiene un régimen. Consulta los resultados para conocer las condiciones de cada opción."
+        : "Aún falta confirmar el régimen de tu restaurante. Puedes revisar los resultados de cada opción o indicarlo en «Editar datos».";
     } else if (currentEval.status === "COMPATIBLE") {
-      summaryMessage = `Tu restaurante cumple con todas las condiciones obligatorias de su régimen actual (${currentEval.title}). Además, tienes ${compatibleAlternatives.length} alternativa(s) legalmente compatible(s).`;
+      summaryMessage = `Según tus datos, tu restaurante cumple las condiciones evaluadas de su régimen actual (${currentEval.title}). El diagnóstico encontró ${alternatives}.`;
     } else if (currentEval.status === "INCOMPATIBLE") {
-      summaryMessage = `Atención: Tu restaurante presenta incumplimientos para permanecer en el ${currentEval.title}. Revisa las condiciones incumplidas y evalúa las ${compatibleAlternatives.length} alternativa(s) compatibles.`;
+      summaryMessage = `Atención: Tus datos muestran condiciones incompatibles con el ${currentEval.title}. El diagnóstico encontró ${alternatives}.`;
     } else {
-      summaryMessage = `Falta información obligatoria para confirmar si tu restaurante cumple todas las condiciones del ${currentEval.title}. Completa los datos faltantes en «Mi restaurante».`;
+      summaryMessage = `Falta información obligatoria para confirmar si tu restaurante cumple todas las condiciones del ${currentEval.title}. Usa «Editar datos» para completar la información pendiente.`;
     }
 
     return {
       declaredRegime,
       currentRegime: declaredRegime,
-      regimeName: currentEval?.title || "Sin régimen especificado",
+      regimeName: currentEval?.title ?? (declaredRegime === "SIN_REGIMEN" ? "Sin régimen registrado" : "Régimen por confirmar"),
       status: currentEval?.status || "INFORMACION_INSUFICIENTE",
       summary: summaryMessage,
       breachedConditions: currentEval?.breachedConditions || [],

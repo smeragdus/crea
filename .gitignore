@@ -44,3 +44,9 @@ next-env.d.ts
 
 # firebase
 .firebase/
+
+/test-results/
+/playwright-report/
+firebase-debug*.log
+firestore-debug.log
+ui-debug.log

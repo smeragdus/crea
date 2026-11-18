@@ -1,4 +1,4 @@
-import { RuleEngine } from "./rule-engine";
+import { RuleEngine, type FullWorkspaceEvaluation } from "./rule-engine";
 import { seedCatalog } from "./seed-catalog";
 import { simulateRestaurantTaxes } from "./tax-simulator";
 import { getRestaurantObligations } from "./sunat-calendar";
@@ -81,7 +81,7 @@ export const SUNAT_RESTAURANT_RAG_CORPUS: RagDocumentChunk[] = [
       "En sencillo: el RER te sirve si tu restaurante necesita entregar facturas a empresas y vende hasta S/ 525,000 al año, con máximo 10 trabajadores por turno. Cada mes pagas el IGV (ventas menos compras con factura) y el 1.5% de tus ventas sin IGV, y te olvidas de la Declaración Anual.",
     sourceId: "sunat-rer",
     legalBasis: "TUO de la Ley del Impuesto a la Renta — Capítulo XV (Art. 117° al 124°-A)",
-    officialUrl: "https://orientacion.sunat.gob.pe/regimen-especial-de-renta-rer",
+    officialUrl: "https://www.gob.pe/institucion/sunat/pages/6989-regimen-especial-de-renta-rer",
     version: "2026.1",
     effectiveDate: "2026-01-01",
   },
@@ -111,7 +111,7 @@ export const SUNAT_RESTAURANT_RAG_CORPUS: RagDocumentChunk[] = [
       "En sencillo: el Régimen General es el régimen sin topes. Aplica obligatoriamente si el restaurante supera las 1,700 UIT anuales o tiene vinculación económica que lo excluya del RMT.",
     sourceId: "sunat-rg",
     legalBasis: "TUO de la Ley del Impuesto a la Renta — D.S. N.° 179-2004-EF",
-    officialUrl: "https://orientacion.sunat.gob.pe/regimen-general",
+    officialUrl: "https://orientacion.sunat.gob.pe/concepto-del-impuesto-a-la-renta-regimen-general",
     version: "2026.1",
     effectiveDate: "2026-01-01",
   },
@@ -126,7 +126,7 @@ export const SUNAT_RESTAURANT_RAG_CORPUS: RagDocumentChunk[] = [
       "En sencillo: cada vez que compras carne, verduras, abarrotes o gas pidiendo Factura con el RUC de tu restaurante, el IGV de esa factura te sirve para descontar el IGV que cobraste en tus platos vendidos. Si compras solo con boleta, pierdes ese descuento.",
     sourceId: "sunat-comprobantes",
     legalBasis: "Reglamento de Comprobantes de Pago — R.S. N.° 007-99/SUNAT y TUO Ley del IGV",
-    officialUrl: "https://emprender.sunat.gob.pe/comprobantes-de-pago/comprobantes-de-pago",
+    officialUrl: "https://orientacion.sunat.gob.pe/comprobantes-de-pago-empresas",
     version: "2026.1",
     effectiveDate: "2026-01-01",
   },
@@ -141,7 +141,7 @@ export const SUNAT_RESTAURANT_RAG_CORPUS: RagDocumentChunk[] = [
       "En sencillo: tus ventas y compras de un mes (por ejemplo, marzo) se declaran y pagan a mediados del mes siguiente (abril), guiándote siempre por el último número de tus 11 dígitos de RUC.",
     sourceId: "sunat-cronograma",
     legalBasis: "Resolución de Superintendencia de Cronograma de Obligaciones Mensuales SUNAT",
-    officialUrl: "https://orientacion.sunat.gob.pe/cronograma-de-obligaciones-mensuales",
+    officialUrl: "https://www.sunat.gob.pe/orientacion/cronogramas/2026/cObligacionMensual2026.html",
     version: "2026.1",
     effectiveDate: "2026-01-01",
   },
@@ -234,7 +234,8 @@ function buildCitations(chunks: RagDocumentChunk[]): CreaIaCitation[] {
  */
 export async function askCreaIa(
   rawQuery: string,
-  context: BusinessContext
+  context: BusinessContext,
+  evaluation?: FullWorkspaceEvaluation,
 ): Promise<CreaIaResponse> {
   const startTime = Date.now();
   const sanitized = sanitizeUserQuery(rawQuery);
@@ -253,10 +254,10 @@ export async function askCreaIa(
   const remaining = Math.max(0, MAX_QUERIES_PER_SESSION - sessionQueryCount);
 
   // 1. Obtener el resultado determinístico del Motor de Reglas (la IA JAMÁS puede contradecirlo)
-  const engineEval = RuleEngine.evaluate(context, seedCatalog);
+  const engineEval = evaluation ?? RuleEngine.evaluate(context, seedCatalog);
   const currentDiag = engineEval.currentRegimeDiagnostic;
   const simulation = simulateRestaurantTaxes(context);
-  const obligationsPlan = getRestaurantObligations(context);
+  const obligationsPlan = getRestaurantObligations(context, "", undefined, engineEval.taxRecommendations);
 
   const compatibleRegimes = engineEval.taxRecommendations.filter(
     (r) => r.status === "COMPATIBLE"
@@ -337,7 +338,7 @@ export async function askCreaIa(
     ? `para «${context.businessName}»`
     : "para tu restaurante";
 
-  let answerParts: string[] = [];
+  const answerParts: string[] = [];
   let colloquialParts: string[] = [];
   let nextSteps: string[] = [];
 
@@ -356,7 +357,7 @@ export async function askCreaIa(
     // Resumen del régimen actual y compatibilidad según el motor de reglas
     if (currentDiag) {
       answerParts.push(
-        `Diagnóstico oficial del motor de reglas ${restaurantLabel}: Tu régimen actual registrado es ${currentDiag.regimeName} y su estado de evaluación es ${currentDiag.status}. ${currentDiag.summary}`
+        `Diagnóstico orientativo ${restaurantLabel}: Tu régimen actual registrado es ${currentDiag.regimeName} y su estado de evaluación es ${currentDiag.status}. ${currentDiag.summary}`
       );
     }
 
@@ -419,7 +420,7 @@ export async function askCreaIa(
         : []),
       obligationsPlan.scheduleLookup.dueDate
         ? `Organiza tus comprobantes de ventas y compras antes de tu próximo vencimiento SUNAT (${obligationsPlan.scheduleLookup.dueDate} para el periodo ${obligationsPlan.scheduleLookup.period}).`
-        : "Registra los 11 dígitos de tu RUC en «Mi restaurante» para consultar tu fecha exacta de vencimiento en el cronograma oficial de SUNAT.",
+        : "Selecciona el último dígito de tu RUC en Obligaciones para consultar el calendario general y las prórrogas de SUNAT.",
       "Solicita siempre Factura electrónica en las compras de insumos de tu restaurante (carnes, abarrotes, gas) para sustentar costos y crédito fiscal de IGV.",
     ];
   }

@@ -1,67 +1,297 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Función auxiliar para verificar rol de administrador o investigador
-    function isAdmin() {
-      return request.auth != null &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "ADMIN";
+    function signedIn() {
+      return request.auth != null;
     }
 
-    function isResearcher() {
-      return request.auth != null &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "RESEARCHER" ||
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "ADMIN");
+    function admin() {
+      return signedIn() && request.auth.token.get("admin", false) == true;
     }
 
-    // Fichas de restaurantes guardadas por los usuarios (cada propietario/administrador solo accede a su restaurante)
-    match /businesses/{businessId} {
-      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.owner_id;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.owner_id;
+    function researcher() {
+      return admin() || (signedIn() && request.auth.token.get("researcher", false) == true);
     }
 
-    // Catálogo de reglas tributarias y fuentes oficiales de SUNAT:
-    // Lectura pública para evaluación transparente, escritura exclusiva para Administradores.
-    match /tax_rules/{ruleId} {
+    function verified() {
+      return signedIn() && request.auth.token.get("email_verified", false) == true;
+    }
+
+    function ownEnrollment() {
+      return get(/databases/$(database)/documents/research_enrollments/$(request.auth.uid)).data;
+    }
+
+    function participant(code) {
+      return verified()
+        && exists(/databases/$(database)/documents/research_enrollments/$(request.auth.uid))
+        && ownEnrollment().code == code;
+    }
+
+    function participantWithVersion(version) {
+      return verified()
+        && exists(/databases/$(database)/documents/research_enrollments/$(request.auth.uid))
+        && ownEnrollment().version == version;
+    }
+
+    function validCode(code) {
+      return code.matches("REST-CAJ-(0[1-9]|[12][0-9]|3[0-6])");
+    }
+
+    function validVersion(value) {
+      return value is string && value.matches("[A-Za-z0-9][A-Za-z0-9._-]{2,59}");
+    }
+
+    function activeVersion(version) {
+      return get(/databases/$(database)/documents/research_study/active).data.version == version;
+    }
+
+    function validQuestion(item) {
+      // La clave nunca forma parte del documento visible para el participante.
+      return item.keys().hasOnly(["prompt", "options"]);
+    }
+
+    function validQuestions(items) {
+      return items is list && items.size() == 18
+          && validQuestion(items[0])
+          && validQuestion(items[1])
+          && validQuestion(items[2])
+          && validQuestion(items[3])
+          && validQuestion(items[4])
+          && validQuestion(items[5])
+          && validQuestion(items[6])
+          && validQuestion(items[7])
+          && validQuestion(items[8])
+          && validQuestion(items[9])
+          && validQuestion(items[10])
+          && validQuestion(items[11])
+          && validQuestion(items[12])
+          && validQuestion(items[13])
+          && validQuestion(items[14])
+          && validQuestion(items[15])
+          && validQuestion(items[16])
+          && validQuestion(items[17]);
+    }
+
+    function validAnswer(items, questions, index) {
+      return items[index] is int && items[index] >= 0 && items[index] < questions[index].options.size();
+    }
+
+    function validAnswers(items, version) {
+      let questions = get(/databases/$(database)/documents/research_instruments/$(version)).data.questions;
+      return items is list && items.size() == 18
+          && validAnswer(items, questions, 0)
+          && validAnswer(items, questions, 1)
+          && validAnswer(items, questions, 2)
+          && validAnswer(items, questions, 3)
+          && validAnswer(items, questions, 4)
+          && validAnswer(items, questions, 5)
+          && validAnswer(items, questions, 6)
+          && validAnswer(items, questions, 7)
+          && validAnswer(items, questions, 8)
+          && validAnswer(items, questions, 9)
+          && validAnswer(items, questions, 10)
+          && validAnswer(items, questions, 11)
+          && validAnswer(items, questions, 12)
+          && validAnswer(items, questions, 13)
+          && validAnswer(items, questions, 14)
+          && validAnswer(items, questions, 15)
+          && validAnswer(items, questions, 16)
+          && validAnswer(items, questions, 17);
+    }
+
+    function limaDate(value) {
+      return (value - duration.value(5, "h")).date();
+    }
+
+    function pretestPath(code) {
+      return /databases/$(database)/documents/research_responses/$(code)/stages/pretest;
+    }
+
+    function postestPath(code) {
+      return /databases/$(database)/documents/research_responses/$(code)/stages/postest;
+    }
+
+    function interventionPath(code) {
+      return /databases/$(database)/documents/research_interventions/$(code);
+    }
+
+    function postestReady(code, version) {
+      return exists(pretestPath(code)) && exists(interventionPath(code))
+        && get(pretestPath(code)).data.version == version
+        && get(interventionPath(code)).data.version == version
+        && limaDate(request.time) > limaDate(get(pretestPath(code)).data.submittedAt);
+    }
+
+    match /businesses/{id} {
+      function ownsBusiness() {
+        return signedIn() && request.auth.uid == resource.data.owner_id;
+      }
+
+      allow get: if signedIn() && (!exists(/databases/$(database)/documents/businesses/$(id)) || ownsBusiness());
+      allow list, delete: if ownsBusiness();
+      allow create: if signedIn() && request.resource.data.owner_id == request.auth.uid;
+      allow update: if ownsBusiness() && request.resource.data.owner_id == resource.data.owner_id;
+
+      match /task_status/{key} {
+        function ownsParent() {
+          return signedIn()
+            && get(/databases/$(database)/documents/businesses/$(id)).data.owner_id == request.auth.uid;
+        }
+
+        allow read: if ownsParent();
+        allow create, update: if ownsParent()
+          && key.matches("2026-(0[1-9]|1[0-2])-(NRUS|RER|RMT|RG)")
+          && request.resource.data.keys().hasOnly(["completed"])
+          && request.resource.data.completed is list && request.resource.data.completed.size() <= 30;
+      }
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.get("role", "USER") == "USER";
+      allow update: if signedIn() && request.auth.uid == uid
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(["role"]);
+    }
+
+    match /tax_rules/{id} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if admin();
     }
 
-    match /official_sources/{sourceId} {
+    match /official_sources/{id} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if admin();
     }
 
-    // Registros de auditoría del sistema
-    match /audit_logs/{logId} {
-      allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update, delete: if false;
+    match /audit_logs/{id} {
+      allow read, create: if admin();
     }
 
-    // Módulo de Investigación Académica (separación estricta entre consentimientos e instrumento anónimo)
+    match /catalog_revisions/{id} {
+      allow read: if admin();
+      allow create: if admin() && request.resource.data.keys().hasOnly([
+        "kind", "targetId", "title", "proposedChange", "sourceUrl", "version", "status", "createdAt", "createdBy"
+      ])
+        && request.resource.data.kind in ["source", "rule"]
+        && request.resource.data.targetId is string && request.resource.data.targetId.size() <= 80
+        && request.resource.data.title is string && request.resource.data.title.size() >= 4 && request.resource.data.title.size() <= 180
+        && request.resource.data.proposedChange is string && request.resource.data.proposedChange.size() >= 15 && request.resource.data.proposedChange.size() <= 2000
+        && request.resource.data.sourceUrl is string && request.resource.data.sourceUrl.matches("https://.{1,504}")
+        && validVersion(request.resource.data.version)
+        && request.resource.data.status == "BORRADOR"
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update: if admin() && resource.data.status == "BORRADOR"
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "reviewedAt", "reviewedBy"])
+        && request.resource.data.status == "APROBADA"
+        && request.resource.data.reviewedAt == request.time
+        && request.resource.data.reviewedBy == request.auth.uid;
+    }
+
+    // El estudio usa un solo instrumento inmutable, consentimientos y una clave separada.
+    match /research_study/active {
+      allow get: if researcher();
+      allow create: if researcher() && request.resource.data.keys().hasOnly(["version", "publishedAt", "publishedBy"])
+        && validVersion(request.resource.data.version)
+        && request.resource.data.publishedAt == request.time
+        && request.resource.data.publishedBy == request.auth.uid
+        && existsAfter(/databases/$(database)/documents/research_instruments/$(request.resource.data.version))
+        && existsAfter(/databases/$(database)/documents/research_answer_keys/$(request.resource.data.version));
+    }
+
+    match /research_instruments/{version} {
+      allow get: if researcher() || participantWithVersion(version);
+      allow create: if researcher()
+        && getAfter(/databases/$(database)/documents/research_study/active).data.version == version
+        && request.resource.data.keys().hasOnly(["version", "questions", "consentVersion", "consentText", "validationDate"])
+        && request.resource.data.version == version && validVersion(request.resource.data.consentVersion)
+        && request.resource.data.consentText is string && request.resource.data.consentText.size() >= 50
+        && request.resource.data.consentText.size() <= 16000
+        && request.resource.data.validationDate is string && request.resource.data.validationDate.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}")
+        && validQuestions(request.resource.data.questions);
+    }
+
+    match /research_answer_keys/{version} {
+      allow get: if researcher();
+      allow create: if researcher()
+        && getAfter(/databases/$(database)/documents/research_study/active).data.version == version
+        && request.resource.data.keys().hasOnly(["correctIndices", "points", "scoringSummary"])
+        && request.resource.data.correctIndices is list && request.resource.data.correctIndices.size() == 18
+        && request.resource.data.points is list && request.resource.data.points.size() == 18
+        && request.resource.data.scoringSummary is string;
+    }
+
+    match /research_enrollments/{uid} {
+      allow get: if researcher() || (verified() && request.auth.uid == uid);
+      allow create: if researcher()
+        && request.resource.data.keys().hasOnly(["code", "version"])
+        && validCode(request.resource.data.code) && activeVersion(request.resource.data.version)
+        && getAfter(/databases/$(database)/documents/research_slots/$(request.resource.data.code)).data.uid == uid;
+    }
+
+    match /research_slots/{code} {
+      allow read: if researcher();
+      allow create: if researcher() && validCode(code)
+        && request.resource.data.keys().hasOnly(["uid", "version"])
+        && activeVersion(request.resource.data.version)
+        && getAfter(/databases/$(database)/documents/research_enrollments/$(request.resource.data.uid)).data.code == code;
+    }
+
+    match /research_participant_consents/{code} {
+      allow get: if researcher() || participant(code);
+      allow create: if participant(code)
+        && request.resource.data.keys().hasOnly(["version", "consentVersion", "role", "acceptedAt"])
+        && request.resource.data.version == ownEnrollment().version
+        && request.resource.data.consentVersion == get(/databases/$(database)/documents/research_instruments/$(ownEnrollment().version)).data.consentVersion
+        && request.resource.data.role in ["PROPIETARIO", "ADMINISTRADOR"]
+        && request.resource.data.acceptedAt == request.time;
+    }
+
+    match /research_responses/{code}/stages/{stage} {
+      allow get: if researcher() || participant(code);
+      allow create: if participant(code) && stage in ["pretest", "postest"]
+        && request.resource.data.keys().hasOnly(["stage", "version", "answers", "submittedAt"])
+        && request.resource.data.stage == stage
+        && request.resource.data.version == ownEnrollment().version
+        && get(/databases/$(database)/documents/research_participant_consents/$(code)).data.version == request.resource.data.version
+        && request.resource.data.submittedAt == request.time
+        && validAnswers(request.resource.data.answers, request.resource.data.version)
+        && (stage == "pretest" || postestReady(code, request.resource.data.version));
+    }
+
+    match /research_interventions/{code} {
+      allow get: if researcher() || participant(code);
+      allow create: if researcher() && validCode(code) && exists(pretestPath(code))
+        && request.resource.data.keys().hasOnly(["version", "modules", "confirmedAt"])
+        && request.resource.data.version == get(pretestPath(code)).data.version
+        && request.resource.data.confirmedAt == request.time
+        && request.resource.data.modules is list && request.resource.data.modules.size() > 0 && request.resource.data.modules.size() <= 7
+        && request.resource.data.modules.hasOnly(["Diagnóstico", "Comparador", "Simulador", "Obligaciones", "Reportes", "Guías", "Crea IA"]);
+    }
+
+    match /research_results/{code} {
+      allow read: if researcher();
+      allow create: if researcher() && validCode(code) && exists(postestPath(code))
+        && request.resource.data.keys().hasOnly(["participantCode", "version", "maximum", "pretest", "postest"])
+        && request.resource.data.participantCode == code
+        && request.resource.data.version == get(postestPath(code)).data.version
+        && request.resource.data.maximum is number && request.resource.data.maximum > 0
+        && request.resource.data.pretest is number && request.resource.data.pretest >= 0
+        && request.resource.data.pretest <= request.resource.data.maximum
+        && request.resource.data.postest is number && request.resource.data.postest >= 0
+        && request.resource.data.postest <= request.resource.data.maximum;
+    }
+
+    // El modelo anterior queda cerrado para cuentas de participante.
     match /research_consents/{code} {
-      allow create: if request.auth != null;
-      allow read: if isResearcher();
-      allow update, delete: if false;
+      allow read: if researcher();
     }
 
     match /research_evaluations/{code} {
-      allow read, create, update: if request.auth != null || isResearcher();
-      allow delete: if isAdmin();
+      allow read: if researcher();
     }
 
-    // Perfiles de usuario (un usuario común no puede autoasignarse rol ADMIN)
-    match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null && request.auth.uid == userId &&
-        (!("role" in request.resource.data) || request.resource.data.role == "USER");
-      allow update: if (request.auth != null && request.auth.uid == userId &&
-        (!("role" in request.resource.data) || request.resource.data.role == resource.data.role)) || isAdmin();
-    }
-
-    // Por defecto negar cualquier otro acceso no autorizado
     match /{document=**} {
       allow read, write: if false;
     }

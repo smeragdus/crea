@@ -1,3 +1,4 @@
+import { RuleEngine } from "./rule-engine";
 import type { BusinessContext } from "./types";
 
 export type PracticalGuide = {
@@ -72,7 +73,7 @@ export const practicalGuides: Record<string, PracticalGuide> = {
     restaurantExample:
       "Dos hermanos que abren una pollería en Los Baños del Inca constituyen una S.R.L. (RUC 20). Por ser Persona Jurídica, el motor de reglas descarta automáticamente el Nuevo RUS y evalúa RER, RMT y RG.",
     sourceId: "sunat-regimes",
-    officialUrl: "https://emprender.sunat.gob.pe/emprendiendo/decido-emprender/tipo-negocio",
+    officialUrl: "https://www.gob.pe/269",
   },
   regime: {
     area: "EVALUACION",
@@ -101,7 +102,7 @@ export const practicalGuides: Record<string, PracticalGuide> = {
       "Un restaurante turístico vende S/ 18,000/mes y tiene 12 trabajadores en el turno del almuerzo. Aunque sus ventas anuales (S/ 216,000) no superan los S/ 525,000 del RER, es INCOMPATIBLE con el RER por superar el límite de 10 trabajadores por turno, siendo compatible con el RMT y RG.",
     note: "El régimen con menor pago estimado mensual no es necesariamente el mejor: primero debe ser legalmente compatible y responder a la realidad operativa del restaurante.",
     sourceId: "sunat-regimes",
-    officialUrl: "https://emprender.sunat.gob.pe/tributando/regimenes-tributarios/conocelos",
+    officialUrl: "https://www.gob.pe/institucion/sunat/pages/280-regimenes-tributarios",
   },
   comprobantes: {
     area: "EVALUACION",
@@ -126,7 +127,7 @@ export const practicalGuides: Record<string, PracticalGuide> = {
     restaurantExample:
       "Una picantería en RER vende S/ 15,000 al mes. Si compra S/ 8,000 de insumos con factura electrónica, utiliza el IGV de esas facturas como crédito fiscal y reduce legalmente el IGV neto a pagar en el mes.",
     sourceId: "sunat-comprobantes",
-    officialUrl: "https://emprender.sunat.gob.pe/comprobantes-de-pago/comprobantes-de-pago",
+    officialUrl: "https://orientacion.sunat.gob.pe/comprobantes-de-pago-empresas",
   },
   cronograma: {
     area: "CUMPLIMIENTO",
@@ -152,7 +153,7 @@ export const practicalGuides: Record<string, PracticalGuide> = {
     restaurantExample:
       "Un restaurante cuyo RUC termina en dígito «4» revisa en el módulo «Mis obligaciones» que su declaración del periodo Marzo 2026 vence el 20 de abril de 2026 y organiza sus facturas de compras 5 días antes.",
     sourceId: "sunat-cronograma",
-    officialUrl: "https://orientacion.sunat.gob.pe/cronograma-de-obligaciones-mensuales",
+    officialUrl: "https://www.sunat.gob.pe/orientacion/cronogramas/2026/cObligacionMensual2026.html",
   },
   "t-registro": {
     area: "CUMPLIMIENTO",
@@ -201,7 +202,7 @@ export const practicalGuides: Record<string, PracticalGuide> = {
     restaurantExample:
       "Una cafetería en Cajamarca mantiene al día su licencia municipal junto con su archivo de declaraciones mensuales ante SUNAT.",
     sourceId: "licencia-paso",
-    officialUrl: "https://www.gob.pe/institucion/produce/campa%C3%B1as/55956-licencia-de-funcionamiento-paso-a-paso",
+    officialUrl: "https://www.gob.pe/institucion/municajamarca/informes-publicaciones/3088226-requisitos-para-licencias-de-funcionamiento-de-locales-comerciales",
   },
 };
 
@@ -214,134 +215,21 @@ export type TaxPath = {
 };
 
 export function getTaxPath(context: BusinessContext): TaxPath {
-  const salesKnown =
-    context.monthlyRevenue !== undefined ||
-    context.annualRevenue !== undefined ||
-    String(context.questionnaire?.P20 || "").startsWith("monto:");
-  const purchasesKnown =
-    context.monthlyPurchases !== undefined ||
-    String(context.questionnaire?.TAX_PURCHASES || "").trim() !== "";
-  const assetsKnown =
-    context.fixedAssetsValue !== undefined ||
-    context.fixedAssets !== undefined ||
-    String(context.questionnaire?.TAX_ASSETS || "").trim() !== "";
-
-  const monthlySales =
-    context.monthlyRevenue ??
-    (context.annualRevenue !== undefined
-      ? context.annualRevenue / 12
-      : salesKnown
-        ? Number(String(context.questionnaire?.P20).slice(6))
-        : 0);
-  const annualSales = context.annualRevenue ?? monthlySales * 12;
-
-  const monthlyPurchases =
-    context.monthlyPurchases ??
-    (purchasesKnown ? Number(context.questionnaire?.TAX_PURCHASES || 0) : 0);
-  const annualPurchases = context.annualPurchases ?? monthlyPurchases * 12;
-
-  const assets =
-    context.fixedAssetsValue ??
-    context.fixedAssets ??
-    (assetsKnown ? Number(context.questionnaire?.TAX_ASSETS || 0) : 0);
-
-  const employeesPerShift =
-    context.employees ??
-    context.employeeCountPerShift ??
-    Number(context.questionnaire?.["P29.1"] || 0);
-
-  const isJuridica =
-    context.personType === "PERSONA_JURIDICA" ||
-    context.legalPerson === "juridica";
-  const needsFacturas =
-    context.needsFacturas ?? context.needsInvoices ?? false;
-  const establishments =
-    context.establishmentCount ?? (context.hasMultipleLocations ? 2 : 1);
-
-  if (!salesKnown || !purchasesKnown || !assetsKnown) {
+  const recommendations = RuleEngine.recommendTax(context);
+  const candidate = recommendations.find(({ status }) => status !== "INCOMPATIBLE");
+  if (!candidate || candidate.status === "INFORMACION_INSUFICIENTE") {
     return {
       title: "Información insuficiente para confirmar compatibilidad",
-      reason:
-        "Para evaluar los regímenes tributarios de tu restaurante sin asumir datos, completa las ventas mensuales, compras de insumos y valor de activos fijos en «Mi restaurante».",
-      checks: [
-        "Registra las ventas mensuales y anuales estimadas del restaurante.",
-        "Registra las compras mensuales de insumos (con factura y con boleta).",
-        "Indica el valor aproximado de tus equipos de cocina y salón (activos fijos) y trabajadores por turno.",
-      ],
+      reason: "Completa los datos pendientes para revisar las alternativas.",
+      checks: [...new Set(recommendations.flatMap(({ missingDataFields }) => missingDataFields))],
       status: "FALTAN_DATOS",
     };
   }
-
-  const nrusFits =
-    !isJuridica &&
-    !needsFacturas &&
-    establishments <= 1 &&
-    monthlySales <= 8000 &&
-    annualSales <= 96000 &&
-    monthlyPurchases <= 8000 &&
-    annualPurchases <= 96000 &&
-    assets <= 70000;
-
-  if (nrusFits) {
-    return {
-      code: "NRUS",
-      title: "Compatible con Nuevo RUS (y alternativas RER, RMT, RG)",
-      reason:
-        "Tu restaurante opera como Persona Natural en 1 solo local, no necesita emitir facturas y sus ventas y compras no superan los S/ 8,000 mensuales (S/ 96,000 anuales) ni S/ 70,000 en activos.",
-      checks: [
-        "Cuota fija mensual: S/ 20 (Categoría 1, hasta S/ 5,000) o S/ 50 (Categoría 2, hasta S/ 8,000).",
-        "Solo permite emitir Boletas de Venta; no permite emitir Facturas.",
-        "También son legalmente compatibles el RER, RMT y RG si en el futuro requieres emitir facturas.",
-      ],
-      status: "PRESELECCION",
-    };
-  }
-
-  const rerFits =
-    annualSales <= 525000 &&
-    annualPurchases <= 525000 &&
-    assets <= 126000 &&
-    employeesPerShift <= 10;
-
-  if (rerFits) {
-    return {
-      code: "RER",
-      title: "Compatible con Régimen Especial (RER), RMT y Régimen General",
-      reason:
-        "Tu restaurante cumple los topes del RER (hasta S/ 525,000 anuales en ventas y compras, máximo S/ 126,000 en activos fijos y hasta 10 trabajadores por turno) y puede emitir facturas y boletas.",
-      checks: [
-        "RER: Pago mensual de 1.5% sobre ingresos netos más IGV (18%), sin Declaración Anual.",
-        "RMT: Alternativa compatible que permite deducir gastos anuales y pagar 1% de pago a cuenta hasta 300 UIT.",
-        "Compara ambos regímenes en el módulo «Comparador y simulador» según tus compras con factura y gastos operativos.",
-      ],
-      status: "PRESELECCION",
-    };
-  }
-
-  const rmtFits = annualSales <= 1700 * 5350;
-  if (rmtFits) {
-    return {
-      code: "RMT",
-      title: "Compatible con Régimen MYPE Tributario (RMT) y Régimen General",
-      reason:
-        "Por el volumen de ventas, compras, activos fijos o número de trabajadores por turno, el restaurante supera los límites del NRUS y del RER, resultando compatible con el RMT (hasta 1,700 UIT) y el Régimen General.",
-      checks: [
-        "RMT: Pago a cuenta mensual de 1% (hasta 300 UIT) o 1.5% e Impuesto a la Renta Anual progresivo (10% / 29.5%) sobre la utilidad neta.",
-        "Permite emitir facturas, boletas y operar con más de un establecimiento.",
-      ],
-      status: "PRESELECCION",
-    };
-  }
-
   return {
-    code: "RG",
-    title: "Compatible con Régimen General (RG)",
-    reason:
-      "Los ingresos proyectados superan el tope de 1,700 UIT del RMT, por lo que el régimen legalmente compatible es el Régimen General.",
-    checks: [
-      "Sin límite de ingresos, compras, activos ni trabajadores.",
-      "Requiere contabilidad completa y Declaración Jurada Anual (29.5% sobre utilidad neta).",
-    ],
+    code: candidate.code,
+    title: candidate.title,
+    reason: "Alternativa compatible según las condiciones evaluadas.",
+    checks: candidate.reasons,
     status: "PRESELECCION",
   };
 }

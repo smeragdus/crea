@@ -1,4 +1,5 @@
-import { BusinessContext, TaxRegimeCode, VerificationStatus } from "./types";
+import { RuleEngine } from "./rule-engine";
+import type { BusinessContext, TaxRecommendation, TaxRegimeCode, VerificationStatus } from "./types";
 
 export interface SunatSchedulePeriod {
   period: string; // YYYY-MM (periodo tributario que se declara al mes siguiente)
@@ -51,134 +52,39 @@ export interface RestaurantObligationsPlan {
   completionDisclaimer: string;
 }
 
-/**
- * Cronograma de obligaciones mensuales SUNAT verificado por último dígito del RUC.
- * Nota: Si el usuario consulta un periodo que aún no ha sido cargado o verificado desde
- * la Resolución de Superintendencia correspondiente, el sistema devuelve explícitamente
- * estado POR_VERIFICAR y no inventa fechas.
- */
-export const OFFICIAL_SUNAT_SCHEDULE: Record<string, SunatSchedulePeriod> = {
-  "2026-01": {
-    period: "2026-01",
-    periodLabel: "Enero 2026 (vence en Febrero 2026)",
-    resolutionReference: "Cronograma de Obligaciones Mensuales SUNAT - Ejercicio 2026",
-    sourceId: "sunat-cronograma",
-    verification: "VIGENTE",
-    dueDatesByLastDigit: {
-      "0": "2026-02-16",
-      "1": "2026-02-17",
-      "2": "2026-02-18",
-      "3": "2026-02-18",
-      "4": "2026-02-19",
-      "5": "2026-02-19",
-      "6": "2026-02-20",
-      "7": "2026-02-20",
-      "8": "2026-02-23",
-      "9": "2026-02-23",
-      BC: "2026-02-24",
-    },
-  },
-  "2026-02": {
-    period: "2026-02",
-    periodLabel: "Febrero 2026 (vence en Marzo 2026)",
-    resolutionReference: "Cronograma de Obligaciones Mensuales SUNAT - Ejercicio 2026",
-    sourceId: "sunat-cronograma",
-    verification: "VIGENTE",
-    dueDatesByLastDigit: {
-      "0": "2026-03-16",
-      "1": "2026-03-17",
-      "2": "2026-03-18",
-      "3": "2026-03-18",
-      "4": "2026-03-19",
-      "5": "2026-03-19",
-      "6": "2026-03-20",
-      "7": "2026-03-20",
-      "8": "2026-03-23",
-      "9": "2026-03-23",
-      BC: "2026-03-24",
-    },
-  },
-  "2026-03": {
-    period: "2026-03",
-    periodLabel: "Marzo 2026 (vence en Abril 2026)",
-    resolutionReference: "Cronograma de Obligaciones Mensuales SUNAT - Ejercicio 2026",
-    sourceId: "sunat-cronograma",
-    verification: "VIGENTE",
-    dueDatesByLastDigit: {
-      "0": "2026-04-15",
-      "1": "2026-04-16",
-      "2": "2026-04-17",
-      "3": "2026-04-17",
-      "4": "2026-04-20",
-      "5": "2026-04-20",
-      "6": "2026-04-21",
-      "7": "2026-04-21",
-      "8": "2026-04-22",
-      "9": "2026-04-22",
-      BC: "2026-04-23",
-    },
-  },
-  "2026-04": {
-    period: "2026-04",
-    periodLabel: "Abril 2026 (vence en Mayo 2026)",
-    resolutionReference: "Cronograma de Obligaciones Mensuales SUNAT - Ejercicio 2026",
-    sourceId: "sunat-cronograma",
-    verification: "VIGENTE",
-    dueDatesByLastDigit: {
-      "0": "2026-05-15",
-      "1": "2026-05-18",
-      "2": "2026-05-19",
-      "3": "2026-05-19",
-      "4": "2026-05-20",
-      "5": "2026-05-20",
-      "6": "2026-05-21",
-      "7": "2026-05-21",
-      "8": "2026-05-22",
-      "9": "2026-05-22",
-      BC: "2026-05-25",
-    },
-  },
-  "2026-05": {
-    period: "2026-05",
-    periodLabel: "Mayo 2026 (vence en Junio 2026)",
-    resolutionReference: "Cronograma de Obligaciones Mensuales SUNAT - Ejercicio 2026",
-    sourceId: "sunat-cronograma",
-    verification: "VIGENTE",
-    dueDatesByLastDigit: {
-      "0": "2026-06-15",
-      "1": "2026-06-16",
-      "2": "2026-06-17",
-      "3": "2026-06-17",
-      "4": "2026-06-18",
-      "5": "2026-06-18",
-      "6": "2026-06-19",
-      "7": "2026-06-19",
-      "8": "2026-06-22",
-      "9": "2026-06-22",
-      BC: "2026-06-23",
-    },
-  },
-  "2026-06": {
-    period: "2026-06",
-    periodLabel: "Junio 2026 (vence en Julio 2026)",
-    resolutionReference: "Cronograma de Obligaciones Mensuales SUNAT - Ejercicio 2026",
-    sourceId: "sunat-cronograma",
-    verification: "VIGENTE",
-    dueDatesByLastDigit: {
-      "0": "2026-07-15",
-      "1": "2026-07-16",
-      "2": "2026-07-17",
-      "3": "2026-07-17",
-      "4": "2026-07-20",
-      "5": "2026-07-20",
-      "6": "2026-07-21",
-      "7": "2026-07-21",
-      "8": "2026-07-22",
-      "9": "2026-07-22",
-      BC: "2026-07-24",
-    },
-  },
-};
+export const SUNAT_SCHEDULE_2026_URL = "https://www.sunat.gob.pe/orientacion/cronogramas/2026/cObligacionMensual2026.html";
+
+const months = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
+const dueDayGroups = [
+  [16, 17, 18, 19, 20, 23, 24], [16, 17, 18, 19, 20, 23, 24],
+  [17, 20, 21, 22, 23, 24, 27], [18, 19, 20, 21, 22, 25, 26],
+  [15, 16, 17, 18, 19, 22, 23], [15, 16, 17, 20, 21, 22, 24],
+  [18, 19, 20, 21, 24, 25, 26], [15, 16, 17, 18, 21, 22, 23],
+  [16, 19, 20, 21, 22, 23, 26], [16, 17, 18, 19, 20, 23, 24],
+  [17, 18, 21, 22, 23, 24, 28], [18, 19, 20, 21, 22, 25, 26],
+];
+const groups = [["0"], ["1"], ["2", "3"], ["4", "5"], ["6", "7"], ["8", "9"], ["BC"]];
+const twoDigits = (value: number) => String(value).padStart(2, "0");
+
+export const OFFICIAL_SUNAT_SCHEDULE: Record<string, SunatSchedulePeriod> = Object.fromEntries(
+  dueDayGroups.map((days, index) => {
+    const period = "2026-" + twoDigits(index + 1);
+    const dueMonth = index === 11 ? "2027-01" : "2026-" + twoDigits(index + 2);
+    return [period, {
+      period,
+      periodLabel: months[index] + " 2026",
+      resolutionReference: "Anexo I de la R.S. N.° 281-2022/SUNAT · Ejercicio 2026",
+      sourceId: "sunat-cronograma",
+      verification: "VIGENTE",
+      dueDatesByLastDigit: Object.fromEntries(groups.flatMap((digits, group) =>
+        digits.map((digit) => [digit, dueMonth + "-" + twoDigits(days[group])])
+      )),
+    } satisfies SunatSchedulePeriod];
+  }),
+);
 
 export function extractRucLastDigit(ruc?: string): string | null {
   if (!ruc) return null;
@@ -187,8 +93,8 @@ export function extractRucLastDigit(ruc?: string): string | null {
   return cleaned[cleaned.length - 1];
 }
 
-export function getSunatDueDate(ruc: string | undefined, period: string = "2026-03") {
-  const lastDigit = extractRucLastDigit(ruc);
+export function getSunatDueDate(ruc: string | undefined, period: string = "2026-03", declaredDigit?: string) {
+  const lastDigit = declaredDigit && /^(?:[0-9]|BC)$/.test(declaredDigit) ? declaredDigit : extractRucLastDigit(ruc);
   const schedule = OFFICIAL_SUNAT_SCHEDULE[period];
 
   if (!schedule) {
@@ -200,7 +106,7 @@ export function getSunatDueDate(ruc: string | undefined, period: string = "2026-
       verification: "POR_VERIFICAR" as VerificationStatus,
       resolutionReference: "Periodo no cargado en tabla verificada local",
       sourceUrl:
-        "https://orientacion.sunat.gob.pe/cronograma-de-obligaciones-mensuales",
+        SUNAT_SCHEDULE_2026_URL,
       note: "El periodo seleccionado no se encuentra en la tabla local verificada. Consulte directamente el cronograma oficial de SUNAT para no asumir una fecha no confirmada.",
     };
   }
@@ -214,8 +120,8 @@ export function getSunatDueDate(ruc: string | undefined, period: string = "2026-
       verification: schedule.verification,
       resolutionReference: schedule.resolutionReference,
       sourceUrl:
-        "https://orientacion.sunat.gob.pe/cronograma-de-obligaciones-mensuales",
-      note: "Registre los 11 dígitos del RUC de su restaurante en «Mi restaurante» para identificar su fecha exacta según el último dígito.",
+        SUNAT_SCHEDULE_2026_URL,
+      note: "Indica el último dígito del RUC o el padrón de Buenos Contribuyentes para consultar el cronograma general.",
     };
   }
 
@@ -229,16 +135,18 @@ export function getSunatDueDate(ruc: string | undefined, period: string = "2026-
     verification: schedule.verification,
     resolutionReference: schedule.resolutionReference,
     sourceUrl:
-      "https://orientacion.sunat.gob.pe/cronograma-de-obligaciones-mensuales",
-    note: `Fecha correspondiente al último dígito de RUC «${lastDigit}» para el periodo ${schedule.periodLabel}.`,
+      SUNAT_SCHEDULE_2026_URL,
+    note: `Fecha del cronograma general para el último dígito del RUC «${lastDigit}» para el periodo ${schedule.periodLabel}.`,
   };
 }
 
 export function getRestaurantObligations(
-  context: BusinessContext,
+  context: BusinessContext | Pick<BusinessContext, "currentRegime" | "ruc" | "rucLastDigit">,
   selectedPeriod: string = "2026-03",
-  fallbackRegime: TaxRegimeCode = "RMT"
+  fallbackRegime: TaxRegimeCode = "RMT",
+  evaluations?: TaxRecommendation[],
 ): RestaurantObligationsPlan {
+  const business = "legalPerson" in context ? context : undefined;
   const activeRegime: TaxRegimeCode =
     context.currentRegime &&
     context.currentRegime !== "SIN_REGIMEN" &&
@@ -246,7 +154,7 @@ export function getRestaurantObligations(
       ? context.currentRegime
       : fallbackRegime;
 
-  const scheduleLookup = getSunatDueDate(context.ruc, selectedPeriod);
+  const scheduleLookup = getSunatDueDate(context.ruc, selectedPeriod, context.rucLastDigit);
 
   const regimeMeta: Record<
     TaxRegimeCode,
@@ -357,7 +265,7 @@ export function getRestaurantObligations(
             ],
       sourceId: activeRegime === "NRUS" ? "sunat-nrus" : "sunat-cronograma",
       sourceUrl:
-        "https://orientacion.sunat.gob.pe/cronograma-de-obligaciones-mensuales",
+        SUNAT_SCHEDULE_2026_URL,
     },
     {
       id: "OBL-02",
@@ -377,7 +285,7 @@ export function getRestaurantObligations(
       ],
       sourceId: "sunat-libros",
       sourceUrl:
-        "https://emprender.sunat.gob.pe/tributando/libros-registros-contables/libros-registros-contables-obligatorios",
+        "https://orientacion.sunat.gob.pe/libros-y-registros-vinculados-asuntos-tributarios",
     },
     {
       id: "OBL-03",
@@ -386,7 +294,7 @@ export function getRestaurantObligations(
       frequency: "PERMANENTE",
       description:
         activeRegime === "NRUS"
-          ? "Emitir Boleta de Venta por los consumos en salón o delivery. A partir de S/ 5.00 la emisión es obligatoria (y por montos menores si el cliente lo solicita)."
+          ? "Emitir Boleta de Venta por los consumos en salón o delivery. Si la venta supera S/ 5, emite el comprobante. Para montos de hasta S/ 5, emítelo si el cliente lo pide y aplica el registro diario que indica SUNAT."
           : "Emitir Factura (cuando el cliente con RUC lo solicite para sustentar gasto/costo) o Boleta de Venta por cada consumo de alimentos y bebidas.",
       documentsToPrepare: [
         "Verificación de serie activa de emisión electrónica (Portal SOL o sistema autorizado).",
@@ -394,7 +302,7 @@ export function getRestaurantObligations(
       ],
       sourceId: "sunat-comprobantes",
       sourceUrl:
-        "https://emprender.sunat.gob.pe/comprobantes-de-pago/comprobantes-de-pago",
+        "https://orientacion.sunat.gob.pe/comprobantes-de-pago-empresas",
     },
   ];
 
@@ -415,18 +323,22 @@ export function getRestaurantObligations(
       sourceUrl:
         activeRegime === "RMT"
           ? "https://orientacion.sunat.gob.pe/regimen-mype-tributario"
-          : "https://orientacion.sunat.gob.pe/regimen-general",
+          : "https://orientacion.sunat.gob.pe/concepto-del-impuesto-a-la-renta-regimen-general",
     });
   }
 
-  if ((context.employees ?? 0) > 1) {
+  const workers = business?.employees ?? business?.employeeCountPerShift
+    ?? (business?.assessmentVersion === 2 ? undefined : business?.employeeCount);
+  const hasEmployees = business?.hasEmployees ?? (workers === undefined ? undefined : workers > 0);
+  if (hasEmployees !== false) {
     obligations.push({
       id: "OBL-05",
-      title: "Declaración mensual de Planilla Electrónica (PLAME) y T-Registro",
+      title: hasEmployees ? "Declaración mensual de Planilla Electrónica (PLAME) y T-Registro"
+        : "Planilla Electrónica y T-Registro si tienes personal dependiente",
       category: "LABORAL",
       frequency: "MENSUAL",
       description:
-        "Registrar al personal de cocina, atención en salón y caja en el T-Registro y declarar mensualmente las remuneraciones, retenciones y aportes (EsSalud / ONP / AFP).",
+        "Si tienes personal dependiente, regístralo en el T-Registro y declara mensualmente las remuneraciones, retenciones y aportes (EsSalud / ONP / AFP).",
       documentsToPrepare: [
         "Altas, bajas o modificaciones de trabajadores en el T-Registro.",
         "Boletas de pago de remuneraciones del mes.",
@@ -439,74 +351,34 @@ export function getRestaurantObligations(
 
   const alerts: RestaurantAlertItem[] = [];
 
-  if (!context.ruc || context.ruc.replace(/\D/g, "").length !== 11) {
+  if (!scheduleLookup.rucLastDigit && selectedPeriod) {
     alerts.push({
       id: "AL-RUC",
       severity: "MEDIA",
-      title: "RUC de 11 dígitos pendiente de registro",
-      description:
-        "No se ha ingresado un RUC válido de 11 dígitos en «Mi restaurante», por lo que no se puede señalar el día exacto de vencimiento en el cronograma oficial.",
-      recommendedAction:
-        "Complete el número de RUC en la ficha «Mi restaurante» para personalizar su calendario de vencimientos.",
+      title: "Fecha por consultar",
+      description: "Para mostrar un vencimiento general necesitamos el último dígito del RUC o el padrón de Buenos Contribuyentes.",
+      recommendedAction: "Selecciona la opción en Obligaciones y consulta si SUNAT publicó una prórroga para tu distrito.",
     });
   }
 
-  if (
-    activeRegime === "NRUS" &&
-    (context.needsFacturas ||
-      (context.emittedReceipts ?? []).includes("FACTURA"))
-  ) {
+  const eligibility = (evaluations ?? (business ? RuleEngine.recommendTax(business) : [])).find(({ code }) => code === activeRegime);
+  if (eligibility?.status === "INCOMPATIBLE") {
     alerts.push({
-      id: "AL-NRUS-FACTURA",
+      id: "AL-REGIME",
       severity: "ALTA",
-      title: "Incompatibilidad crítica: Nuevo RUS no permite emitir facturas",
-      description:
-        "El restaurante registra estar en el Nuevo RUS pero declara emitir o necesitar emitir facturas a clientes corporativos o instituciones.",
-      recommendedAction:
-        "Revise en «Mi diagnóstico» el cambio oportuno al Régimen Especial (RER) o Régimen MYPE Tributario (RMT) con su declaración mensual.",
+      title: "Condiciones incompatibles con el régimen consultado",
+      description: eligibility.breachedConditions.join(" "),
+      recommendedAction: "Revisa el diagnóstico para confirmar las alternativas aplicables según tus datos.",
     });
   }
 
-  if (
-    activeRegime === "NRUS" &&
-    ((context.monthlyRevenue ?? 0) > 8000 ||
-      (context.monthlyPurchases ?? 0) > 8000 ||
-      (context.establishmentCount ?? 1) > 1)
-  ) {
-    alerts.push({
-      id: "AL-NRUS-TOPE",
-      severity: "ALTA",
-      title: "Incompatibilidad con los límites del Nuevo RUS",
-      description:
-        "Las ventas mensuales, compras mensuales o cantidad de locales declarados superan el límite legal permitido para el Nuevo RUS (máximo S/ 8,000/mes y 1 solo local).",
-      recommendedAction:
-        "Evalúe inmediatamente las alternativas compatibles en «Mi diagnóstico» y «Comparador y simulador».",
-    });
-  }
-
-  if (
-    activeRegime === "RER" &&
-    ((context.employees ?? 0) > 10 ||
-      (context.fixedAssetsValue ?? 0) > 126000 ||
-      (context.monthlyRevenue ?? 0) * 12 > 525000)
-  ) {
-    alerts.push({
-      id: "AL-RER-TOPE",
-      severity: "ALTA",
-      title: "Exceso de límites del Régimen Especial (RER)",
-      description:
-        "El restaurante supera el tope de 10 trabajadores por turno, S/ 126,000 en activos fijos o S/ 525,000 de ingresos/compras anuales del RER.",
-      recommendedAction:
-        "Revise su migración hacia el Régimen MYPE Tributario (RMT) o Régimen General (RG).",
-    });
-  }
-
-  if ((context.monthlyPurchasesWithoutInvoice ?? 0) > 0 && activeRegime !== "NRUS") {
+  const purchasesWithoutInvoice = business?.monthlyPurchasesWithoutInvoice ?? 0;
+  if (purchasesWithoutInvoice > 0 && activeRegime !== "NRUS") {
     alerts.push({
       id: "AL-COMPRAS-SIN-FACTURA",
       severity: "INFORMATIVA",
       title: "Compras de insumos sin factura no reducen el IGV",
-      description: `Se han registrado S/ ${(context.monthlyPurchasesWithoutInvoice ?? 0).toFixed(2)} mensuales en compras con boleta o sin comprobante. Estas compras no otorgan crédito fiscal de IGV.`,
+      description: `Se han registrado S/ ${purchasesWithoutInvoice.toFixed(2)} mensuales en compras con boleta o sin comprobante. Estas compras no otorgan crédito fiscal de IGV.`,
       recommendedAction:
         "Solicite factura electrónica a sus proveedores de carnes, abarrotes y bebidas para aprovechar el crédito fiscal del IGV.",
     });

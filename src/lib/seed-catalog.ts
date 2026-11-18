@@ -7,8 +7,9 @@ import type {
   Source,
   TaxRuleDetail,
 } from "./types";
+import { UIT_SOURCE_URL, IGV_RESTAURANT_SOURCE_URL } from "./tax-constants";
 
-export const CATALOG_VERSION = "2026.2-RESTAURANTES-CAJ";
+export const CATALOG_VERSION = "2026.3-RESTAURANTES-CAJ";
 
 const verifiedTaxSource = {
   reviewedAt: "2026-10-15",
@@ -23,11 +24,29 @@ const verifiedTaxSource = {
 
 export const sources: Source[] = [
   {
+    ...verifiedTaxSource,
+    id: "mef-uit-2026",
+    institution: "MEF", entity: "Ministerio de Economía y Finanzas",
+    title: "Valor de la UIT 2026", url: UIT_SOURCE_URL,
+    legalBasis: "Decreto Supremo N.° 301-2025-EF",
+    evidence: "UIT 2026 de S/ 5 500 desde el 1 de enero de 2026.",
+    reviewedAt: "2026-11-17", version: "2026.3",
+  },
+  {
+    ...verifiedTaxSource,
+    id: "sunat-igv-mype-2026",
+    institution: "SUNAT", entity: "SUNAT",
+    title: "IGV temporal para MYPE de restaurantes", url: IGV_RESTAURANT_SOURCE_URL,
+    legalBasis: "Ley N.° 31556 y modificatorias",
+    evidence: "En 2026, 8 % de IGV y 2,5 % de IPM para contribuyentes que cumplen los requisitos.",
+    reviewedAt: "2026-11-17", version: "2026.3",
+  },
+  {
     id: "sunat-ruc",
     institution: "SUNAT",
     entity: "SUNAT",
     title: "Inscripción y actualización de datos en el RUC",
-    url: "https://orientacion.sunat.gob.pe/actualizacion-o-modificacion-de-datos-del-ruc",
+    url: "https://orientacion.sunat.gob.pe/6268-01-modificacion-o-actualizacion-de-la-informacion-del-registro",
     legalBasis: "D. Leg. N.° 943 y R.S. N.° 210-2004/SUNAT",
     evidence:
       "Ficha RUC: actividad económica CIIU 5610, domicilio fiscal, estado Activo y condición Habido.",
@@ -38,7 +57,7 @@ export const sources: Source[] = [
     institution: "SUNAT",
     entity: "SUNAT",
     title: "Regímenes tributarios aplicables a negocios y restaurantes",
-    url: "https://emprender.sunat.gob.pe/ruc/regimenes-tributarios-mype/regimenes-tributarios",
+    url: "https://www.gob.pe/institucion/sunat/pages/280-regimenes-tributarios",
     legalBasis:
       "D. Leg. N.° 937 (NRUS), TUO LIR Cap. XV (RER), D. Leg. N.° 1269 (RMT) y D.S. N.° 179-2004-EF (RG)",
     evidence:
@@ -61,7 +80,7 @@ export const sources: Source[] = [
     institution: "SUNAT",
     entity: "SUNAT",
     title: "Régimen Especial del Impuesto a la Renta (RER)",
-    url: "https://orientacion.sunat.gob.pe/regimen-especial-de-renta-rer",
+    url: "https://www.gob.pe/institucion/sunat/pages/6989-regimen-especial-de-renta-rer",
     legalBasis: "TUO de la Ley del Impuesto a la Renta, Artículos 117° al 124°-A",
     evidence:
       "Límite anual de ingresos/compras de S/ 525,000, activos fijos hasta S/ 126,000 y máximo 10 trabajadores por turno.",
@@ -83,7 +102,7 @@ export const sources: Source[] = [
     institution: "SUNAT",
     entity: "SUNAT",
     title: "Régimen General del Impuesto a la Renta",
-    url: "https://orientacion.sunat.gob.pe/regimen-general",
+    url: "https://orientacion.sunat.gob.pe/concepto-del-impuesto-a-la-renta-regimen-general",
     legalBasis: "TUO de la Ley del Impuesto a la Renta (D.S. N.° 179-2004-EF)",
     evidence:
       "Sin límite de ingresos ni compras; pago a cuenta mensual de 1.5% o coeficiente e Impuesto a la Renta anual de 29.5%.",
@@ -117,7 +136,7 @@ export const sources: Source[] = [
     institution: "SUNAT",
     entity: "SUNAT",
     title: "Cronograma de Obligaciones Mensuales SUNAT",
-    url: "https://orientacion.sunat.gob.pe/cronograma-de-obligaciones-mensuales",
+    url: "https://www.sunat.gob.pe/orientacion/cronogramas/2026/cObligacionMensual2026.html",
     legalBasis:
       "Resolución de Superintendencia de cronogramas de vencimiento mensual según último dígito del RUC",
     evidence:
@@ -140,7 +159,7 @@ export const sources: Source[] = [
     institution: "PRODUCE / Municipalidad",
     entity: "Municipalidad Provincial de Cajamarca",
     title: "Licencia de Funcionamiento e ITSE para Restaurantes",
-    url: "https://www.gob.pe/institucion/produce/campa%C3%B1as/55956-licencia-de-funcionamiento-paso-a-paso",
+    url: "https://www.gob.pe/institucion/municajamarca/informes-publicaciones/3088226-requisitos-para-licencias-de-funcionamiento-de-locales-comerciales",
     legalBasis: "TUO de la Ley N.° 28976 - Ley Marco de Licencia de Funcionamiento",
     evidence:
       "Licencia municipal de funcionamiento e inspección técnica de seguridad en edificaciones para establecimientos gastronómicos.",
@@ -327,7 +346,7 @@ export const taxRules: TaxRuleDetail[] = rawTaxRules.map((item) => ({
   ...item,
   title: item.name,
   description: item.conditionDescription,
-  version: "2026.1",
+  version: "2026.3",
   effectiveFrom: "2026-01-01",
   effectiveDate: "2026-01-01",
   lastVerifiedAt: "2026-10-15",

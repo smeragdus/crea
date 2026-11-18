@@ -1,0 +1,15 @@
+export const TAX_YEAR = 2026;
+export const UIT_2026 = 5500;
+export const UIT_SOURCE_URL = "https://www.gob.pe/institucion/mef/noticias/1314665-mef-establece-en-s-5500-el-valor-de-la-uit-para-el-ano-2026";
+export const NRUS_MONTHLY_LIMIT_CAT1 = 5_000;
+export const NRUS_MONTHLY_LIMIT_CAT2 = 8_000;
+export const NRUS_ANNUAL_LIMIT = 96_000;
+export const NRUS_ASSETS_LIMIT = 70_000;
+export const RER_ANNUAL_INCOME_LIMIT = 525_000;
+export const RER_ANNUAL_PURCHASES_LIMIT = 525_000;
+export const RER_ASSETS_LIMIT = 126_000;
+export const RER_WORKERS_PER_SHIFT_LIMIT = 10;
+export const RMT_INCOME_LIMIT_2026 = 1700 * UIT_2026;
+export const IGV_GENERAL = 0.18;
+export const IGV_RESTAURANTS_2026 = 0.105;
+export const IGV_RESTAURANT_SOURCE_URL = "https://orientacion.sunat.gob.pe/reduccion-del-igv-para-restaurantes-hoteles-y-alojamiento-turisticos-1";

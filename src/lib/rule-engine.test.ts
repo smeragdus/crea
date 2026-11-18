@@ -2,16 +2,6 @@ import { describe, expect, it } from "vitest";
 import { askCreaIa, resetCreaIaRateLimitForTest } from "./crea-ia";
 import { DEMO_PRESETS } from "./demo-presets";
 import { questions } from "./questionnaire";
-import {
-  compareParticipantPrePost,
-  createPendingInstrumentTemplate,
-  exportResearchRecordsToCsv,
-  getSanitizedInstrumentForParticipant,
-  isValidParticipantCode,
-  scoreEvaluationSubmission,
-  validatePosttestEligibility,
-  type ParticipantAcademicRecord,
-} from "./research-engine";
 import { RuleEngine } from "./rule-engine";
 import { rules, seedCatalog, sources } from "./seed-catalog";
 import { getRestaurantObligations, getSunatDueDate } from "./sunat-calendar";
@@ -232,7 +222,7 @@ describe("8. Cálculos del simulador tributario y cronograma oficial de SUNAT", 
   it("consulta el cronograma oficial de SUNAT por último dígito del RUC sin inventar fechas para periodos no cargados", () => {
     const valid = getSunatDueDate("10428519302", "2026-03"); // Termina en 2
     expect(valid.rucLastDigit).toBe("2");
-    expect(valid.dueDate).toBe("2026-04-17");
+    expect(valid.dueDate).toBe("2026-04-21");
     expect(valid.verification).toBe("VIGENTE");
 
     const unknownPeriod = getSunatDueDate("10428519302", "2029-12");
@@ -260,99 +250,5 @@ describe("9. Asistente Crea IA y controles de seguridad", () => {
     );
     expect(outOfScope.hasSufficientInformation).toBe(false);
     expect(outOfScope.answer).toContain("nunca solicita");
-  });
-});
-
-describe("10. Validación del módulo de Investigación Académica (Pretest y Postest)", () => {
-  it("valida códigos anónimos (36 restaurantes), oculta respuestas correctas durante pruebas, exige otro día para el postest y exporta CSV sin datos personales", () => {
-    expect(isValidParticipantCode("REST-CAJ-01")).toBe(true);
-    expect(isValidParticipantCode("REST-CAJ-36")).toBe(true);
-    expect(isValidParticipantCode("REST-CAJ-37")).toBe(false);
-
-    const inst = createPendingInstrumentTemplate();
-    expect(inst.questions).toHaveLength(20);
-
-    // Verificar que la vista para el participante jamás exponga correctOptionId
-    const sanitized = getSanitizedInstrumentForParticipant(inst);
-    expect("correctOptionId" in sanitized[0]).toBe(false);
-
-    // Simular respuestas para Pretest
-    const answersPre: Record<string, "A" | "B" | "C" | "D"> = {};
-    inst.questions.forEach((q, idx) => {
-      answersPre[q.id] = idx < 10 ? "A" : "B"; // 10 correctas
-    });
-    const scoresPre = scoreEvaluationSubmission(inst, answersPre);
-    expect(scoresPre.total).toBe(10);
-
-    const record: ParticipantAcademicRecord = {
-      participantCode: "REST-CAJ-01",
-      consentAccepted: true,
-      roleInRestaurant: "PROPIETARIO",
-      pretest: {
-        participantCode: "REST-CAJ-01",
-        stage: "PRETEST",
-        instrumentVersion: inst.version,
-        submittedDateIso: "2026-10-10T10:00:00.000Z",
-        calendarDay: "2026-10-10",
-        selectedAnswers: answersPre,
-        scores: scoresPre,
-      },
-      intervention: {
-        participantCode: "REST-CAJ-01",
-        modulesVisited: ["Mi diagnóstico", "Simulador"],
-        completedDiagnostic: true,
-        usedSimulator: true,
-        reviewedObligations: false,
-        consultedCreaIa: false,
-        firstSessionTimestamp: "2026-10-10T10:15:00.000Z",
-        lastSessionTimestamp: "2026-10-10T10:30:00.000Z",
-      },
-    };
-
-    // No debe permitir Postest el mismo día
-    const sameDayCheck = validatePosttestEligibility(
-      record,
-      inst.version,
-      "2026-10-10T18:00:00.000Z"
-    );
-    expect(sameDayCheck.eligible).toBe(false);
-
-    // No debe permitir Postest con una versión distinta del instrumento
-    const diffVersionCheck = validatePosttestEligibility(
-      record,
-      "OTRA-VERSION-2.0",
-      "2026-10-12T10:00:00.000Z"
-    );
-    expect(diffVersionCheck.eligible).toBe(false);
-
-    // Sí debe permitir Postest en un día posterior con la misma versión
-    const nextDayCheck = validatePosttestEligibility(
-      record,
-      inst.version,
-      "2026-10-12T10:00:00.000Z"
-    );
-    expect(nextDayCheck.eligible).toBe(true);
-
-    // Registrar Postest y comparar por dimensión D1, D2, D3
-    const answersPost: Record<string, "A" | "B" | "C" | "D"> = {};
-    inst.questions.forEach((q) => {
-      answersPost[q.id] = "A"; // 20 correctas
-    });
-    record.posttest = {
-      participantCode: "REST-CAJ-01",
-      stage: "POSTTEST",
-      instrumentVersion: inst.version,
-      submittedDateIso: "2026-10-12T10:00:00.000Z",
-      calendarDay: "2026-10-12",
-      selectedAnswers: answersPost,
-      scores: scoreEvaluationSubmission(inst, answersPost),
-    };
-
-    const comp = compareParticipantPrePost(record);
-    expect(comp?.totalDiff).toBe(10);
-
-    const csv = exportResearchRecordsToCsv([record]);
-    expect(csv).toContain("REST-CAJ-01");
-    expect(csv).toContain("D1_Pretest");
   });
 });

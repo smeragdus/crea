@@ -1,6 +1,6 @@
 import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, type Auth } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import { connectAuthEmulator, getAuth, GoogleAuthProvider, type Auth } from "firebase/auth";
+import { connectFirestoreEmulator, getFirestore, type Firestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -11,11 +11,13 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+const emulator = process.env.NEXT_PUBLIC_CREA_EMULATORS === "true";
+const configuredValues = [firebaseConfig.apiKey, firebaseConfig.authDomain, firebaseConfig.projectId, firebaseConfig.appId];
+
 export function isFirebaseConfigured(): boolean {
-  return Boolean(
-    process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
-    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
-  );
+  return process.env.NEXT_PUBLIC_CREA_DEMO !== "true"
+    && configuredValues.every((value) => value && !value.startsWith("tu-") && !value.startsWith("tu_"))
+    && (!emulator || Boolean(firebaseConfig.projectId?.startsWith("demo-")));
 }
 
 let app: FirebaseApp | null = null;
@@ -36,6 +38,7 @@ export function getFirebaseAuth(): Auth | null {
   if (!firebaseApp) return null;
   if (!auth) {
     auth = getAuth(firebaseApp);
+    if (emulator) connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
   }
   return auth;
 }
@@ -45,6 +48,7 @@ export function getFirebaseDb(): Firestore | null {
   if (!firebaseApp) return null;
   if (!db) {
     db = getFirestore(firebaseApp);
+    if (emulator) connectFirestoreEmulator(db, "127.0.0.1", 8080);
   }
   return db;
 }

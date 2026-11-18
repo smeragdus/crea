@@ -18,6 +18,10 @@ export type RestaurantActivityCode =
   | "CATERING_EVENTOS";
 
 export type BusinessContext = {
+  assessmentVersion?: 2;
+  maxMonthlyRevenue?: number;
+  maxMonthlyPurchases?: number;
+  rucLastDigit?: string;
   questionnaire?: Record<string, string | string[]>;
   businessName: string;
   purpose: "crear" | "formalizar" | "revisar";

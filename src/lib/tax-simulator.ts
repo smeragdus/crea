@@ -1,4 +1,7 @@
-import { BusinessContext, TaxRegimeCode } from "./types";
+import type { BusinessContext, TaxRegimeCode } from "./types";
+import { IGV_GENERAL, IGV_RESTAURANTS_2026, NRUS_MONTHLY_LIMIT_CAT1, NRUS_MONTHLY_LIMIT_CAT2, RER_ANNUAL_INCOME_LIMIT, RER_ANNUAL_PURCHASES_LIMIT, RMT_INCOME_LIMIT_2026, UIT_2026 } from "./tax-constants";
+
+export { UIT_2026 } from "./tax-constants";
 
 export interface RegimeSimulationDetail {
   regime: TaxRegimeCode;
@@ -43,14 +46,9 @@ export interface CustomSimulationInputs {
   grossMonthlyPurchasesWithInvoice?: number;
   monthlyPurchasesWithoutInvoice?: number;
   monthlyOperatingExpenses?: number;
-  useReducedRestaurantIgv?: boolean; // Informativo: Ley 31556 / 32219 (sujeto a verificación vigente por contador)
+  useReducedRestaurantIgv?: boolean;
+  fiscalCreditFromInvoices?: number;
 }
-
-/**
- * UIT 2026 referencial (D.S. EF vigente) utilizada para límites en UIT (1,700 UIT, 300 UIT, 15 UIT).
- * Se expone explícitamente en los supuestos del simulador.
- */
-export const UIT_2026 = 5350;
 
 export function simulateRestaurantTaxes(
   context: BusinessContext,
@@ -59,12 +57,11 @@ export function simulateRestaurantTaxes(
   const grossSales =
     custom?.grossMonthlySales ??
     context.monthlyRevenue ??
-    (context.annualRevenue !== undefined ? context.annualRevenue / 12 : 0);
+    (context.assessmentVersion !== 2 && context.annualRevenue !== undefined ? context.annualRevenue / 12 : 0);
 
   const grossPurchasesWithInvoice =
     custom?.grossMonthlyPurchasesWithInvoice ??
     context.monthlyPurchasesWithInvoice ??
-    context.monthlyPurchases ??
     0;
 
   const purchasesWithoutInvoice =
@@ -79,22 +76,20 @@ export function simulateRestaurantTaxes(
 
   // Tasa general IGV + IPM = 18% (0.18).
   // Si el usuario activa la vista comparativa informativa de tasa especial MYPE restaurantes, se indica explícitamente que requiere validar vigencia y requisitos de ingresos por restaurante.
-  const igvRate = custom?.useReducedRestaurantIgv ? 0.10 : 0.18;
+  const igvRate = custom?.useReducedRestaurantIgv ? IGV_RESTAURANTS_2026 : IGV_GENERAL;
 
   const hasEnoughSalesData =
     custom?.grossMonthlySales !== undefined ||
     context.monthlyRevenue !== undefined ||
-    context.annualRevenue !== undefined;
+    (context.assessmentVersion !== 2 && context.annualRevenue !== undefined);
 
   const netSales = Number((grossSales / (1 + igvRate)).toFixed(2));
   const igvSales = Number((grossSales - netSales).toFixed(2));
 
-  const netPurchasesWithInvoice = Number(
-    (grossPurchasesWithInvoice / (1 + igvRate)).toFixed(2)
+  const igvCredit = custom?.fiscalCreditFromInvoices ?? Number(
+    (grossPurchasesWithInvoice - grossPurchasesWithInvoice / (1 + IGV_GENERAL)).toFixed(2)
   );
-  const igvCredit = Number(
-    (grossPurchasesWithInvoice - netPurchasesWithInvoice).toFixed(2)
-  );
+  const netPurchasesWithInvoice = grossPurchasesWithInvoice - igvCredit;
 
   // IGV neto por pagar (en regímenes afectos a IGV: RER, RMT, RG)
   const monthlyIgvPayable = Number(Math.max(0, igvSales - igvCredit).toFixed(2));
@@ -125,9 +120,9 @@ export function simulateRestaurantTaxes(
   if (!hasEnoughSalesData) {
     nrusReason =
       "Falta registrar las ventas o compras mensuales para determinar la categoría del Nuevo RUS.";
-  } else if (maxNrusBase <= 5000) {
+  } else if (maxNrusBase <= NRUS_MONTHLY_LIMIT_CAT1) {
     nrusMonthlyQuota = 20;
-  } else if (maxNrusBase <= 8000) {
+  } else if (maxNrusBase <= NRUS_MONTHLY_LIMIT_CAT2) {
     nrusMonthlyQuota = 50;
   } else {
     nrusCanEstimate = false;
@@ -157,7 +152,7 @@ export function simulateRestaurantTaxes(
     calculationExplanation: nrusCanEstimate
       ? [
           `Ventas brutas mensuales: S/ ${grossSales.toFixed(2)} | Compras totales mensuales: S/ ${(grossPurchasesWithInvoice + purchasesWithoutInvoice).toFixed(2)}.`,
-          maxNrusBase <= 5000
+          maxNrusBase <= NRUS_MONTHLY_LIMIT_CAT1
             ? "Se ubica en la Categoría 1 (hasta S/ 5,000 mensuales de ingresos o compras): cuota fija mensual de S/ 20.00."
             : "Se ubica en la Categoría 2 (más de S/ 5,000 hasta S/ 8,000 mensuales de ingresos o compras): cuota fija mensual de S/ 50.00.",
           "La cuota fija reemplaza al IGV y al Impuesto a la Renta. No presenta Declaración Jurada Anual.",
@@ -170,8 +165,8 @@ export function simulateRestaurantTaxes(
   // 2. Régimen Especial de Renta (RER)
   const rerCanEstimate =
     hasEnoughSalesData &&
-    netAnnualSales <= 525000 &&
-    (grossPurchasesWithInvoice + purchasesWithoutInvoice) * 12 <= 525000;
+    netAnnualSales <= RER_ANNUAL_INCOME_LIMIT &&
+    (grossPurchasesWithInvoice + purchasesWithoutInvoice) * 12 <= RER_ANNUAL_PURCHASES_LIMIT;
   const rerMonthlyIncomeTax = Number((netSales * 0.015).toFixed(2));
   const rerTotalMonthly = Number(
     (monthlyIgvPayable + rerMonthlyIncomeTax).toFixed(2)
@@ -212,7 +207,7 @@ export function simulateRestaurantTaxes(
   };
 
   // 3. Régimen MYPE Tributario (RMT)
-  const rmtCanEstimate = hasEnoughSalesData && netAnnualSales <= 1700 * UIT_2026;
+  const rmtCanEstimate = hasEnoughSalesData && netAnnualSales <= RMT_INCOME_LIMIT_2026;
   const rmtMonthlyRate = netAnnualSales <= 300 * UIT_2026 ? 0.01 : 0.015;
   const rmtMonthlyIncomeTax = Number((netSales * rmtMonthlyRate).toFixed(2));
   const rmtTotalMonthly = Number(
@@ -242,7 +237,7 @@ export function simulateRestaurantTaxes(
     insufficientDataReason: !hasEnoughSalesData
       ? "Falta registrar ventas mensuales."
       : !rmtCanEstimate
-        ? `Los ingresos netos anuales superan las 1,700 UIT (S/ ${(1700 * UIT_2026).toLocaleString("es-PE")}).`
+        ? `Los ingresos netos anuales superan las 1,700 UIT (S/ ${RMT_INCOME_LIMIT_2026.toLocaleString("es-PE")}).`
         : undefined,
     grossMonthlySales: grossSales,
     netMonthlySales: netSales,
@@ -328,7 +323,8 @@ export function simulateRestaurantTaxes(
       monthlyOperatingExpenses: operatingExpenses,
     },
     assumptions: [
-      `Las ventas brutas e insumos con factura registrados se desagregan considerando una tasa de IGV de ${(igvRate * 100).toFixed(0)}%.`,
+      `Las ventas brutas se desagregan considerando una tasa de IGV de ${(igvRate * 100).toLocaleString("es-PE")} % para ventas.`,
+      "El crédito fiscal usa el importe declarado. Si lo omites, se estima suponiendo que todas las facturas de compra están gravadas al 18 %.",
       "Solo las compras con factura electrónica o física autorizada que cumplen requisitos sustanciales y formales otorgan crédito fiscal de IGV.",
       `Las compras sin factura (boletas de venta o mercados sin comprobante: S/ ${purchasesWithoutInvoice.toFixed(2)}/mes) NO generan crédito fiscal de IGV.`,
       `Valor referencial de la UIT considerado para tramos (15 UIT, 300 UIT y 1,700 UIT): S/ ${UIT_2026.toLocaleString("es-PE")}.`,
