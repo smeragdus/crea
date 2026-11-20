@@ -207,6 +207,9 @@ body { padding-bottom: calc(5.25rem + env(safe-area-inset-bottom)); }
 .crea-cloud-form { flex: none; border-top: 1px solid var(--border); padding: .7rem 1rem; display: grid; gap: .5rem; }
 .crea-cloud-chip { min-height: 2rem; padding: .15rem .5rem; border: 1px solid #7a886d; border-radius: 1rem; font-size: .75rem; cursor: pointer; }
 .crea-cloud-chip:hover { background: var(--muted); }
+@media (min-width: 640px) and (max-width: 1365px) {
+  .wizard-actions { padding-inline-end: 7.5rem; }
+}
 @media (max-width: 639px) {
   .crea-cloud-trigger { width: 3.2rem; justify-content: center; padding: 0; }
   .crea-cloud-label { display: none; }

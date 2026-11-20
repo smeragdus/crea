@@ -34,7 +34,7 @@ test("una idea puede proyectar ventas sin RUC y guardar su ruta", async ({ page 
   const cloudBounds = await page.getByRole("button", { name: "CREA IA, asistente de orientación" }).boundingBox();
   expect(actionBounds).not.toBeNull();
   expect(cloudBounds).not.toBeNull();
-  if (page.viewportSize()!.width < 640 && actionBounds && cloudBounds) {
+  if (actionBounds && cloudBounds) {
     expect(actionBounds.x + actionBounds.width).toBeLessThanOrEqual(cloudBounds.x);
   }
   await fillProfile(page, "Solo tengo una idea de negocio");

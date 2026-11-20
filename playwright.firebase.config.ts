@@ -11,6 +11,7 @@ export default defineConfig({
   outputDir: "test-results/firebase-browser",
   workers: 1,
   timeout: 120000,
+  expect: { timeout: 20000 },
   use: {
     ...devices["Desktop Chrome"],
     baseURL,

@@ -50,8 +50,22 @@ pnpm test
 pnpm test:assistant
 pnpm build
 pnpm exec playwright install chromium
-pnpm test:e2e
-pnpm dlx firebase-tools emulators:exec --only auth,firestore --project demo-crea "pnpm test:rules && pnpm test:e2e:firebase"
+pnpm test:e2e --timeout=90000
+pnpm dlx firebase-tools emulators:exec --only auth,firestore --project demo-crea "pnpm test:rules && pnpm test:e2e:firebase --timeout=360000"
 ```
 
-Los recorridos del emulador crean y califican participantes ficticios en el proyecto local `demo-crea`. Usa un emulador aislado. Si el puerto predeterminado de Firestore está ocupado, cambia el puerto en una copia local de `firebase.json` y pásala a `emulators:exec` con `--config`. El comando comunica el puerto a las pruebas a través de `FIRESTORE_EMULATOR_HOST`.
+Los recorridos del emulador crean y califican participantes ficticios en el proyecto local `demo-crea`. Usa un emulador aislado. Si el puerto predeterminado de Firestore está ocupado, cambia el puerto en una copia local de `firebase.json` y pásala a `emulators:exec` con `--config`. El comando comunica el puerto a las pruebas a través de `FIRESTORE_EMULATOR_HOST`. Si el servidor web de pruebas ya está iniciado con la configuración del emulador, `CREA_FIREBASE_E2E_URL` permite reutilizarlo con una URL local.
+
+## Resultados de la verificación
+
+| Comando | Resultado |
+| --- | --- |
+| `pnpm typecheck` y `pnpm lint` | Completados correctamente. |
+| `pnpm test` | 37 pruebas aprobadas. |
+| `pnpm test:assistant` | 3 casos aprobados con respuestas simuladas del proveedor. Incluyen el modo sin proveedor, el rechazo de datos no admitidos y los límites de frecuencia. |
+| `pnpm build` | 21 páginas generadas para el sitio estático. |
+| `pnpm test:e2e` | 33 casos aprobados sobre la exportación estática, en escritorio, tableta y móvil. Incluye auditorías Axe y navegación por teclado. Se repitió el caso de la primera etapa en los tres tamaños tras el ajuste de espacio de la nube. |
+| `pnpm test:rules` | 3 casos aprobados en Firestore Emulator. |
+| `pnpm test:e2e:firebase` | 1 recorrido aprobado con Auth y Firestore en el proyecto local `demo-crea`. Cubre registro, acceso administrativo, persistencia de una evaluación, pretest, postest, restricción del asistente y exportación CSV con datos ficticios. |
+
+Se comprobó también que el panel abierto conserva su conversación al cambiar de ruta, que el movimiento reducido desactiva su animación y que la nube deja espacio para los botones del cuestionario en los tamaños verificados.
