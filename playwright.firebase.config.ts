@@ -18,6 +18,7 @@ export default defineConfig({
     env: {
       NEXT_PUBLIC_CREA_DEMO: "false",
       NEXT_PUBLIC_CREA_EMULATORS: "true",
+      NEXT_PUBLIC_CREA_FIRESTORE_PORT: process.env.FIRESTORE_EMULATOR_HOST?.split(":").at(-1) ?? "8080",
       NEXT_PUBLIC_FIREBASE_API_KEY: "emulator-only-crea",
       NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "demo-crea.firebaseapp.com",
       NEXT_PUBLIC_FIREBASE_PROJECT_ID: "demo-crea",
