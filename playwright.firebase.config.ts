@@ -14,7 +14,8 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "pnpm exec next dev --hostname 127.0.0.1 --port 3101",
+    command: "pnpm exec next dev --hostname 127.0.0.1 --port 3101"
+      + (process.env.CREA_FIREBASE_E2E_WEBPACK === "1" ? " --webpack" : ""),
     env: {
       NEXT_PUBLIC_CREA_DEMO: "false",
       NEXT_PUBLIC_CREA_EMULATORS: "true",

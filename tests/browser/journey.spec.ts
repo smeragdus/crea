@@ -167,8 +167,9 @@ test("resultados pendientes, comparador, guías y recorrido de teclado", async (
   await expect(page.locator("#guia-ruc")).toHaveAttribute("open", "");
   await expect(page.locator("#guia-ruc summary")).toBeFocused();
   await guideSearch.fill("Mantener actualizada la Ficha RUC del restaurante");
-  await expect(page.getByRole("option", { name: /Mantener actualizada la Ficha RUC/ })).toBeVisible();
-  await guideSearch.press("ArrowDown");
+  const articleOption = page.getByRole("option", { name: /Mantener actualizada la Ficha RUC/ });
+  await expect(articleOption).toBeVisible();
+  await expect(guideSearch).toHaveAttribute("aria-activedescendant", (await articleOption.getAttribute("id"))!);
   await guideSearch.press("Enter");
   await expect(page.getByRole("heading", { name: "Qué preparar" })).toBeVisible();
 

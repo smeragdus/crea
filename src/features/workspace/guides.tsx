@@ -41,6 +41,7 @@ export function Guides() {
         open={open && Boolean(term) && count > 0}
         onOpenChange={setOpen}
         openOnFocus
+        autoHighlight
         filter={false}
       >
         <div className="grid gap-2">
