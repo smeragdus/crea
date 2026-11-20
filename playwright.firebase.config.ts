@@ -1,6 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const baseURL = "http://127.0.0.1:3101";
+const existingServer = process.env.CREA_FIREBASE_E2E_URL;
+if (existingServer && !["localhost", "127.0.0.1", "[::1]"].includes(new URL(existingServer).hostname)) {
+  throw new Error("Las pruebas académicas de Firebase requieren una aplicación local conectada a los emuladores.");
+}
+const baseURL = existingServer || "http://127.0.0.1:3101";
 
 export default defineConfig({
   testDir: "./tests/firebase-browser",
@@ -13,9 +17,8 @@ export default defineConfig({
     channel: process.env.CREA_BROWSER_CHANNEL || undefined,
     trace: "retain-on-failure",
   },
-  webServer: {
-    command: "pnpm exec next dev --hostname 127.0.0.1 --port 3101"
-      + (process.env.CREA_FIREBASE_E2E_WEBPACK === "1" ? " --webpack" : ""),
+  webServer: existingServer ? undefined : {
+    command: "pnpm exec next dev --hostname 127.0.0.1 --port 3101",
     env: {
       NEXT_PUBLIC_CREA_DEMO: "false",
       NEXT_PUBLIC_CREA_EMULATORS: "true",

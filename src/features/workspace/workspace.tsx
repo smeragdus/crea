@@ -77,7 +77,9 @@ function WorkspaceContent({ initialSection }: { initialSection: "diagnostico" | 
   const unfinished = useUnfinishedAssessment();
   const uid = user?.uid;
   const ownerEmail = user?.emailVerified ? user.email : undefined;
-  const [assessment, setAssessment] = useState<AssessmentSnapshot | null>(null);
+  const [activeAssessment, setAssessment] = useState<AssessmentSnapshot | null>(null);
+  const [example, setExample] = useState<AssessmentSnapshot | null>(null);
+  const assessment = example ?? activeAssessment;
   const [businesses, setBusinesses] = useState<StoredBusiness[]>([]);
   const [legacy, setLegacy] = useState<BusinessContext | null>(null);
   const [guest, setGuest] = useState<AssessmentSnapshot | null>(null);
@@ -166,6 +168,7 @@ function WorkspaceContent({ initialSection }: { initialSection: "diagnostico" | 
     try {
       saveAssessment(snapshot, uid);
       setAssessment(snapshot);
+      setExample(null);
       setFailure("");
       setFeedback("");
     } catch {
@@ -177,7 +180,7 @@ function WorkspaceContent({ initialSection }: { initialSection: "diagnostico" | 
     try {
       const { DEMO_PRESETS } = await import("@/lib/demo-presets");
       const preset = DEMO_PRESETS.find(({ id }) => id === presetId) ?? DEMO_PRESETS[0];
-      setAssessment({ id: "demo-" + preset.id, context: preset.context, date: limaDay(new Date()), demo: true });
+      setExample({ id: "demo-" + preset.id, context: preset.context, date: limaDay(new Date()), demo: true });
       setFailure("");
       setFeedback("");
       router.push(base + "seccion=diagnostico");
@@ -246,7 +249,7 @@ function WorkspaceContent({ initialSection }: { initialSection: "diagnostico" | 
         </div> : <>
           {!assessment.demo && assessment.context.assessmentVersion !== 3 && <div className="print-hidden"><Notice tone="warning">Esta evaluación corresponde a una versión anterior. Revisa tus datos con el asistente actualizado.</Notice></div>}
           {assessment.demo && <div className="print-hidden flex flex-wrap items-center gap-2"><Notice tone="warning">Simulación con datos ficticios.</Notice>
-            <Button variant="outline" onClick={() => setRetry((value) => value + 1)}>Salir del ejemplo</Button>
+            <Button variant="outline" onClick={() => setExample(null)}>Salir del ejemplo</Button>
           </div>}
           {section.key === "diagnostico" && <Results evaluation={evaluation} context={assessment.context} workspaceHref={base} prepareEdit={assessment.demo ? undefined : edit} />}
           {section.key === "diagnostico" && <div className="print-hidden grid gap-3">

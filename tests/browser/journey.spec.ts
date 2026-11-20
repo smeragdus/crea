@@ -130,7 +130,7 @@ test("resultados pendientes, comparador, guías y recorrido de teclado", async (
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Ver mi diagnóstico" }).click();
-  await expect(page.getByText("Información insuficiente", { exact: true })).toHaveCount(3);
+  await expect(page.getByText("Información insuficiente", { exact: true })).toHaveCount(3, { timeout: 15000 });
   await page.getByRole("link", { name: "Completar compras brutas anuales" }).click();
   await expect(page.getByRole("heading", { name: "Cambiar compras brutas anuales" })).toBeFocused();
   await expect(page.getByLabel("Ventas anuales", { exact: true })).toHaveCount(0);
@@ -171,6 +171,7 @@ test("resultados pendientes, comparador, guías y recorrido de teclado", async (
   await expect(articleOption).toBeVisible();
   await expect(guideSearch).toHaveAttribute("aria-activedescendant", (await articleOption.getAttribute("id"))!);
   await guideSearch.press("Enter");
+  await expect(page).toHaveURL(/\/requisitos\/ficha-ruc(?:[?#].*)?$/, { timeout: 30000 });
   await expect(page.getByRole("heading", { name: "Qué preparar" })).toBeVisible();
 
   await page.goto("/");

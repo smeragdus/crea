@@ -179,7 +179,7 @@ function CloudChat({ context }: { context: Context | null }) {
     <button ref={button} type="button" disabled={!ready} aria-label="CREA IA, asistente de orientación" aria-expanded={open} aria-controls={open ? "crea-cloud-panel" : undefined}
       className="crea-cloud-trigger" onClick={() => open ? dismiss() : setOpen(true)}>
       <span className="crea-cloud-icon" aria-hidden="true"><Cloud fill="currentColor" strokeWidth={1.5} /><Sparkles strokeWidth={2} /></span>
-      <span>CREA IA</span>
+      <span className="crea-cloud-label">CREA IA</span>
     </button>
   </div>;
 }

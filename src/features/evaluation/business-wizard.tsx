@@ -293,7 +293,7 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
             </section>
           </> : (step === 0 && !draft.stage ? ["stage" as const] : currentFields).map(field)}
           {failure && <Notice tone="error">{failure}</Notice>}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5">
+          <div className="wizard-actions flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5">
             {edit?.returnToDiagnosis || (previous && !edit) ? <LinkButton href={diagnosisHref} variant="ghost">Cancelar</LinkButton>
               : edit ? <Button type="button" variant="ghost" onClick={() => endEdit(true)}>Cancelar</Button>
                 : chapter > 0 ? <Button type="button" variant="ghost" onClick={() => goTo(activeSteps[chapter - 1])}><ArrowLeft aria-hidden="true" /> Atrás</Button> : <span />}

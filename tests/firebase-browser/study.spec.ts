@@ -124,7 +124,7 @@ test("registro, persistencia, administración y estudio completo en Firebase Emu
   const staffContext = await browser.newContext();
   const staff = await staffContext.newPage();
   try {
-    const app = "http://127.0.0.1:3101";
+    const app = process.env.CREA_FIREBASE_E2E_URL || "http://127.0.0.1:3101";
     await staff.goto(app + "/ingresar");
     await staff.getByLabel("Correo electrónico").fill(adminEmail);
     await staff.getByLabel("Contraseña", { exact: true }).fill(samplePassword);

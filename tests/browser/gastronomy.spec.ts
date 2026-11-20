@@ -28,6 +28,15 @@ test("la nube conserva la conversación, permite cerrarla con Escape y se restri
 
 test("una idea puede proyectar ventas sin RUC y guardar su ruta", async ({ page }) => {
   await page.goto("/negocios/nuevo");
+  const advance = page.getByRole("button", { name: "Continuar" });
+  await advance.scrollIntoViewIfNeeded();
+  const actionBounds = await advance.boundingBox();
+  const cloudBounds = await page.getByRole("button", { name: "CREA IA, asistente de orientación" }).boundingBox();
+  expect(actionBounds).not.toBeNull();
+  expect(cloudBounds).not.toBeNull();
+  if (page.viewportSize()!.width < 640 && actionBounds && cloudBounds) {
+    expect(actionBounds.x + actionBounds.width).toBeLessThanOrEqual(cloudBounds.x);
+  }
   await fillProfile(page, "Solo tengo una idea de negocio");
   await expect(page.getByLabel("¿En qué régimen estás inscrito?")).toHaveCount(0);
   await expect(page.getByRole("group", { name: /inscrito en el RUC/ })).toHaveCount(0);
@@ -53,6 +62,11 @@ test("una idea puede proyectar ventas sin RUC y guardar su ruta", async ({ page 
   await expect(page.getByText(/1 de \d+ tareas marcadas/)).toBeVisible();
   await page.reload();
   await expect(page.getByRole("checkbox", { name: "Definir la forma de operar" })).toBeChecked();
+  await page.getByRole("link", { name: "Ejemplos" }).click();
+  await page.getByRole("button", { name: /Abrir ejemplo: Cafetería en preparación/ }).click();
+  await expect(page.getByText("Simulación con datos ficticios.")).toBeVisible();
+  await page.getByRole("button", { name: "Salir del ejemplo" }).click();
+  await expect(page.getByText(/5610.*Actividades de restaurantes/)).toBeVisible();
 });
 
 for (const stage of ["Estoy preparando mi negocio", "Mi negocio ya funciona, pero necesito formalizarlo"]) {
