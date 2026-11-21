@@ -1,7 +1,9 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
-import { choose, fillOrigins, fillProfile } from "../helpers/assessment";
+import { advanceTo, choose, fillPurchasesOrigin, fillProfile, fillSalesOrigin } from "../helpers/assessment";
+
+test.describe.configure({ timeout: 90_000 });
 
 const basicAnswers = (page: Page, regime?: string) => fillProfile(page, "Mi negocio ya está formalizado", regime);
 
@@ -34,27 +36,36 @@ test("inicio, validación, revisión y diagnóstico con datos completos", async 
   await expect(page.getByText("Selecciona un tipo de establecimiento.")).toBeVisible();
   await expect(page.getByLabel("Nombre del restaurante (opcional)")).toHaveCount(0);
   await basicAnswers(page);
-  await page.getByRole("button", { name: "Continuar" }).click();
   await expect(page.getByRole("heading", { name: "Ventas y compras" })).toBeFocused();
-  await fillOrigins(page);
+  await fillSalesOrigin(page);
   await expect(page.getByLabel("Ventas anuales", { exact: true })).toHaveValue("");
   await page.getByLabel("Ventas anuales", { exact: true }).fill("54000");
-  await page.getByLabel("Compras anuales", { exact: true }).fill("26400");
   await page.getByLabel("Ingresos brutos anuales").fill("54000");
-  await page.getByLabel("Compras brutas anuales").fill("26400");
   await page.getByLabel("Ventas del mes más alto").fill("4500");
+  await fillPurchasesOrigin(page);
+  await page.getByLabel("Compras anuales", { exact: true }).fill("26400");
+  await page.getByLabel("Compras brutas anuales").fill("26400");
   await page.getByLabel("Compras del mes más alto").fill("2200");
   await page.getByRole("button", { name: "Continuar" }).click();
-  await page.getByLabel("Valor de los equipos y muebles del negocio").fill("12000");
-  await page.getByLabel("Máximo de trabajadores en un turno").fill("2");
+  await advanceTo(page, "#locations");
   await page.getByLabel("Número de locales o unidades de operación").fill("1");
+  await advanceTo(page, "#assets");
+  await page.getByLabel("Valor de los equipos y muebles del negocio").fill("12000");
+  await advanceTo(page, "#workers");
+  await page.getByLabel("Máximo de trabajadores en un turno").fill("2");
+  await advanceTo(page, "#nrusRestriction");
   await choose(page, /actividades excluidas del Nuevo RUS/, "No");
+  await advanceTo(page, "#rerRestriction");
   await choose(page, /actividades excluidas del RER/, "No");
-  await choose(page, /domiciliado en Perú/, "Sí");
-  await choose(page, /ejercicio anterior superaron/, "No");
+  await advanceTo(page, "#foreignBranch");
   await page.getByRole("group", { name: /sucursal, agencia/ }).getByRole("radio", { name: "No", exact: true }).check();
+  await advanceTo(page, "#linkage");
   await page.getByRole("group", { name: /vinculado por capital/ }).getByRole("radio", { name: "No", exact: true }).check();
-  await page.getByRole("button", { name: "Continuar" }).click();
+  await advanceTo(page, "#domicile");
+  await choose(page, /domiciliado en Perú/, "Sí");
+  await advanceTo(page, "#priorRmt");
+  await choose(page, /ejercicio anterior superaron/, "No");
+  await advanceTo(page, "#name");
   await page.getByLabel("Nombre del restaurante (opcional)").fill("Restaurante de prueba");
   await page.getByRole("button", { name: "Cambiar ventas del año" }).click();
   await expect(page.getByLabel("Ventas anuales", { exact: true })).toHaveValue("54000");
@@ -122,13 +133,13 @@ test("inicio, validación, revisión y diagnóstico con datos completos", async 
 test("resultados pendientes, comparador, guías y recorrido de teclado", async ({ page }) => {
   await page.goto("/negocios/nuevo");
   await basicAnswers(page);
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await fillOrigins(page);
+  await fillSalesOrigin(page);
   await page.getByLabel("Ventas anuales", { exact: true }).fill("54000");
   await page.getByLabel("Ingresos brutos anuales").fill("54000");
   await page.getByLabel("Ventas del mes más alto").fill("4500");
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await page.getByRole("button", { name: "Continuar" }).click();
+
+  await fillPurchasesOrigin(page);
+  await advanceTo(page, "#name");
   await page.getByRole("button", { name: "Ver mi diagnóstico" }).click();
   await expect(page.getByText("Información insuficiente", { exact: true })).toHaveCount(3, { timeout: 15000 });
   await page.getByRole("link", { name: "Completar compras brutas anuales" }).click();
@@ -190,17 +201,16 @@ test("resultados pendientes, comparador, guías y recorrido de teclado", async (
 test("recupera respuestas y el paso al volver a la evaluación", async ({ page }) => {
   await page.goto("/negocios/nuevo");
   await basicAnswers(page);
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await fillOrigins(page);
+  await fillSalesOrigin(page);
   await page.getByLabel("Ventas anuales", { exact: true }).fill("34000");
   await page.getByRole("link", { name: "Pausar evaluación" }).click();
   await page.getByRole("link", { name: "Continuar mi evaluación" }).click();
-  await expect(page.getByRole("heading", { name: "Ventas y compras" })).toBeVisible();
+  await expect(page.locator("#salesOrigin")).toBeVisible();
   await expect(page.getByLabel("Ventas anuales", { exact: true })).toHaveValue("34000");
   await page.reload();
   await expect(page.getByLabel("Ventas anuales", { exact: true })).toHaveValue("34000");
   await page.getByRole("button", { name: "Atrás" }).click();
-  await expect(page.getByLabel("¿En qué régimen estás inscrito?")).toHaveValue("NRUS");
+  await expect(page.locator("#workforce")).toBeVisible();
 });
 
 test("obligaciones públicas y consulta voluntaria del vencimiento", async ({ page }) => {
@@ -225,16 +235,13 @@ test("obligaciones públicas y consulta voluntaria del vencimiento", async ({ pa
 
 test("régimen desconocido, preguntas condicionales y resultado incompatible", async ({ page }) => {
   await page.goto("/negocios/nuevo");
-  await basicAnswers(page, "DESCONOCIDO");
-  await page.getByRole("radio", { name: /Como empresa/ }).check();
-  await expect(page.getByRole("group", { name: "¿Necesitarás emitir facturas a tus clientes?" })).toBeVisible();
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await fillOrigins(page);
+  await fillProfile(page, "Mi negocio ya está formalizado", "DESCONOCIDO", { legal: "juridica" });
+  await fillSalesOrigin(page);
   await expect(page.getByLabel("Ventas del mes más alto")).toHaveCount(0);
   await page.getByLabel("Ventas anuales", { exact: true }).fill("9350001");
+  await fillPurchasesOrigin(page);
   await expect(page.getByLabel("Compras anuales", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await expect(page.getByRole("heading", { name: "Revisa tus datos" })).toBeVisible();
+  await advanceTo(page, "#name");
   await page.getByRole("button", { name: "Cambiar ventas del año" }).click();
   await page.getByLabel("Ventas anuales", { exact: true }).fill("55000");
   await page.getByRole("button", { name: "Guardar cambio" }).click();

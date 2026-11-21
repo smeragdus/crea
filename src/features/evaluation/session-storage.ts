@@ -1,8 +1,8 @@
 import type { BusinessContext } from "@/lib/types";
-import type { AssessmentDraft } from "./assessment";
+import type { AssessmentDraft, AssessmentField } from "./assessment";
 
 export type AssessmentSnapshot = { id?: string; saved?: boolean; date: string; context: BusinessContext; demo?: boolean };
-export type DraftSnapshot = { answers: AssessmentDraft; step: number };
+export type DraftSnapshot = { answers: AssessmentDraft; step: number; question?: AssessmentField };
 const changed = "crea:assessment-changed";
 
 export function subscribeToAssessment(callback: () => void) {

@@ -222,7 +222,7 @@ export function relevantAssessmentFields(draft: AssessmentDraft): AssessmentFiel
     && !(purchasesKnown && exceeds("annualPurchases", RER_ANNUAL_PURCHASES_LIMIT));
   const rmt = !(salesKnown && exceeds("annualSales", RMT_INCOME_LIMIT_2026));
   const conditional: Partial<Record<AssessmentField, boolean>> = {
-    establishment: modern || !draft.activity,
+    establishment: true,
     description: modern,
     onlineOrders: modern,
     channels: modern && draft.onlineOrders === "yes",
@@ -282,6 +282,8 @@ export function validateAssessmentStep(draft: AssessmentDraft, step: number, vis
         if (visible.includes(field) && !draft[field]) issues[field] = "Selecciona una opción. Puedes indicar que no sabes.";
       }
     }
+    if (!draft.establishment) issues.establishment = "Selecciona un tipo de establecimiento.";
+    if (!draft.stage) issues.stage = "Selecciona la etapa de tu negocio.";
     if (draft.stage && !draft.description.trim()) issues.description = "Describe qué ofrecerás y cómo atenderás.";
     if (draft.stage && !confirmedClassification(draft.activity, draft.activityEvidence, draft.secondary) && draft.activity !== "unknown") {
       issues.activity = "Confirma el código o indica que la clasificación queda pendiente.";

@@ -35,6 +35,19 @@ export function SiteHeader() {
     }
   }
 
+  if (pathname === "/negocios/nuevo") return <>
+    <a href="#contenido" className="skip-link">Saltar al contenido</a>
+    <header className="bg-[#edf5fb] px-4 pt-5 font-[Arial,Helvetica,sans-serif] sm:px-8">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 rounded-t-[28px] border-b border-blue-100 bg-white px-6 py-5 sm:px-10">
+        <Link href="/" aria-label="CREA, inicio" className="text-4xl font-black tracking-tight text-[#0a318c]">Crea</Link>
+        <nav aria-label="Navegación principal" className="flex gap-3 text-sm font-semibold text-[#0a4db7]">
+          <Link href="/" className="rounded-xl px-4 py-3 hover:bg-blue-50">Inicio</Link>
+          <Link href="/negocios" className="rounded-xl border border-blue-200 px-4 py-3">Mi espacio</Link>
+        </nav>
+      </div>
+    </header>
+  </>;
+
   if (pathname === "/") return <>
     <a href="#contenido" className="skip-link">Saltar al contenido</a>
     <header className="bg-[#edf5fb] px-4 pt-5 font-[Arial,Helvetica,sans-serif] sm:px-6">

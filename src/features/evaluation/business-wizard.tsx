@@ -4,11 +4,11 @@ import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { SourceLink } from "@/components/ui/primitives";
 import { useAssistantContext } from "@/features/assistant/cloud";
 import { localAssistantTopic } from "@/lib/assistant-topics";
 import { ciiuCatalog, isCiiuCode } from "@/lib/ciiu-catalog";
+import styles from "./wizard.module.css";
 import { ClassificationField } from "./classification";
 import { ProjectionCalculator } from "@/features/workspace/projection-calculator";
 import { LinkButton, Notice, PageHeading } from "@/components/ui/primitives";
@@ -73,6 +73,7 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
     const restoredStep = assessmentFields[restored.step];
     return restoredStep?.some((field) => visible.includes(field)) ? restored.step : reviewStep;
   });
+  const [cursor, setCursor] = useState<AssessmentField | undefined>(() => restored?.question);
   const [edit, setEdit] = useState<Edit | null>(() => requestedField && relevantAssessmentFields(draft).includes(requestedField)
     ? { fields: [requestedField], original: draft, returnToDiagnosis: true } : null);
   const [errors, setErrors] = useState<Errors>({});
@@ -83,8 +84,20 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
   const visible = relevantAssessmentFields(draft);
   const activeSteps = steps.map((_, index) => index).filter((index) => assessmentFields[index].some((field) => visible.includes(field)));
   const chapter = activeSteps.indexOf(step);
+  // Keep each financial bundle together so projections and amounts can be checked side by side.
+  const groupsFor = (index: number): AssessmentField[][] => {
+    const fields = assessmentFields[index].filter((field) => visible.includes(field));
+    if (index !== 1 || !draft.stage) return fields.map((field) => [field]);
+    return [
+      fields.filter((field) => field === "salesOrigin" || ["annualSales", "grossAnnualSales", "maxMonthlySales"].includes(field)),
+      fields.filter((field) => field === "purchasesOrigin" || ["annualPurchases", "grossPurchases", "maxMonthlyPurchases"].includes(field)),
+    ].filter((group) => group.length);
+  };
+  const groups = groupsFor(step);
+  const position = Math.max(0, groups.findIndex((group) => cursor && group.includes(cursor)));
+  const currentGroup = groups[position] ?? [];
   const [focusedQuestion, setFocusedQuestion] = useState("");
-  const helpField = edit?.fields[0];
+  const helpField = edit?.fields[0] ?? cursor;
   const focusTopic = localAssistantTopic(focusedQuestion);
   const stageAnswered = Boolean(draft.stage);
   const planning = isPlanning(draft.stage);
@@ -103,16 +116,16 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
   useEffect(() => {
     if (previous) return;
     const answers = edit?.original ?? draft;
-    if (Object.values(answers).some(Boolean)) storeDraft({ answers, step }, uid);
+    if (Object.values(answers).some(Boolean)) storeDraft({ answers, step, question: cursor }, uid);
     else storeDraft(null, uid);
-  }, [draft, edit, previous, step, uid]);
+  }, [draft, edit, previous, step, cursor, uid]);
 
   useEffect(() => {
     if (!moved.current) return;
     const trigger = returnFocus.current && document.getElementById("change-" + returnFocus.current);
     (trigger || heading.current)?.focus();
     returnFocus.current = null;
-  }, [step, edit]);
+  }, [step, cursor, edit]);
 
   function update(key: AssessmentField, value: string) {
     setDraft((current) => {
@@ -130,11 +143,12 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
     setErrors((current) => ({ ...current, [key]: undefined }));
   }
 
-  function goTo(index: number) {
+  function goTo(index: number, question?: AssessmentField) {
     moved.current = true;
     returnFocus.current = null;
     setErrors({});
     setFocusedQuestion("");
+    setCursor(question);
     setStep(index);
   }
 
@@ -199,32 +213,23 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
       return;
     }
 
-    if (step === 0 && !draft.establishment) {
-      setErrors({ establishment: "Selecciona un tipo de establecimiento." });
-      focusField("establishment");
-      return;
-    }
-    if (step === 0 && !draft.stage) {
-      setErrors({ stage: "Selecciona la etapa de tu negocio." });
-      focusField("stage");
-      return;
-    }
-    const nextErrors = validateAssessmentStep(draft, step, visible);
-    const invalid = Object.keys(nextErrors)[0] as AssessmentField | undefined;
-    if (invalid) {
-      setErrors(nextErrors);
-      focusField(invalid);
-      return;
-    }
     if (step !== reviewStep) {
-      goTo(activeSteps[chapter + 1]);
+      const issues = validateAssessmentStep(draft, step, visible);
+      const invalid = currentGroup.find((field) => issues[field]);
+      if (invalid) {
+        setErrors(issues);
+        focusField(invalid);
+        return;
+      }
+      if (position + 1 < groups.length) goTo(step, groups[position + 1][0]);
+      else goTo(activeSteps[chapter + 1]);
       return;
     }
     for (const index of activeSteps) {
       const issues = validateAssessmentStep(draft, index, visible);
       const field = Object.keys(issues)[0] as AssessmentField | undefined;
       if (field) {
-        goTo(index);
+        goTo(index, field);
         setErrors(issues);
         focusField(field);
         return;
@@ -234,43 +239,39 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
   }
 
   const currentFields = edit ? edit.fields.filter((field, index) => index === 0 || visible.includes(field))
-    : assessmentFields[step].filter((field) => visible.includes(field));
+    : currentGroup;
   const field = (id: AssessmentField) => id === "activity" && draft.stage ?
     <ClassificationField key={id} description={draft.description} mode={declaredMode(draft)} evidence={draft.activityEvidence} primary={draft.activity}
       secondary={draft.secondary} error={errors.activity} onPrimary={(value) => update("activity", value)}
       onEvidence={(value) => update("activityEvidence", value)} onSecondary={(value) => update("secondary", value)} /> :
     <Question key={id} id={id} draft={draft} value={draft[id]} error={errors[id]} onChange={(value) => update(id, value)} />;
 
-  return <div className="container-site page-shell">
-    <PageHeading title={previous ? "Actualiza tu evaluación" : "Evalúa tu negocio gastronómico"}
-      description={previous ? previous.context.businessName || undefined : restored ? "Tu borrador se recuperó en esta pestaña." : "Para negocios gastronómicos del distrito de Cajamarca, Perú."}
-      actions={!previous && !edit && unfinished && <LinkButton href="/" variant="ghost">Pausar evaluación</LinkButton>} />
-    <div className="wizard-grid">
-      <nav className="wizard-nav" aria-label="Progreso de la evaluación">
-        <ol className="wizard-progress">
-          {activeSteps.map((index) => <li key={index} className={index < step ? "step-done" : undefined} aria-current={index === step ? "step" : undefined}>
-            <span className="step-number">{index < step ? <Check size={16} aria-label="Completado" /> : activeSteps.indexOf(index) + 1}</span> {steps[index].label}
+  return <div className={styles.background}>
+    <div className={styles.shell}>
+      <nav className={styles.navigation} aria-label="Progreso de la evaluación">
+        <ol>
+          {activeSteps.map((index, order) => <li key={index} data-complete={index < step} aria-current={index === step ? "step" : undefined}>
+            <span>{index < step ? <Check size={16} aria-label="Completado" /> : order + 1}</span>
+            {steps[index].label}
           </li>)}
         </ol>
       </nav>
-      <Card className="p-5 sm:p-8">
-        <form onSubmit={submit} noValidate className="grid gap-7" onFocus={(event) => {
+        <form onSubmit={submit} noValidate className={styles.form} onFocus={(event) => {
           const input = event.target;
           if (!(input instanceof HTMLInputElement || input instanceof HTMLSelectElement || input instanceof HTMLTextAreaElement)) return;
           const question = input.closest("fieldset")?.querySelector("legend")?.textContent ?? input.labels?.[0]?.textContent;
           if (question) setFocusedQuestion(question.trim());
         }}>
-          <div key={edit ? "edit-" + edit.fields[0] : step} className="flow-step">
-            {!edit && <>
-              <p className="eyebrow mb-2">Paso {chapter + 1} de {activeSteps.length}</p>
-              <div className="step-track" aria-hidden="true">
-                {activeSteps.map((index) => <span key={index} data-reached={index <= step} />)}
-              </div>
-            </>}
-            <h2 ref={heading} tabIndex={-1} className="editorial-title">{edit ? "Cambiar " + assessmentFieldLabels[edit.fields[0]].toLowerCase() : steps[step].label}</h2>
-            <p className="mt-2 text-muted-foreground">{edit
+          <div>
+            {!edit && <p className={styles.counter}>Paso {chapter + 1} de {activeSteps.length}{step !== reviewStep && " · Pregunta " + (position + 1) + " de " + groups.length}</p>}
+            {!edit && <progress className={styles.progress} aria-label="Avance del paso" max={Math.max(1, groups.length)} value={step === reviewStep ? Math.max(1, groups.length) : position + 1} />}
+            <h1 ref={heading} tabIndex={-1} className={edit || step === reviewStep ? styles.title : "sr-only"}>
+              {edit ? "Cambiar " + assessmentFieldLabels[edit.fields[0]].toLowerCase() : step === reviewStep ? "Revisa tus datos" : step === 0 && position === 0 ? "Evalúa tu negocio gastronómico" : steps[step].label}
+            </h1>
+            {!edit && step === 0 && position === 0 && <p className="mt-4 text-sm text-slate-600">Para negocios gastronómicos del distrito de Cajamarca, Perú.</p>}
+            {(edit || step === reviewStep) && <p className="mt-3 text-slate-600">{edit
               ? (edit.returnToDiagnosis ? "Al guardar verás tu diagnóstico actualizado." : "Al guardar volverás a la revisión.")
-              : steps[step].description}</p>
+              : steps[step].description}</p>}
           </div>
           {edit ? <>
             {field(currentFields[0])}
@@ -282,7 +283,7 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
             <Review draft={draft} visible={visible} edit={startEdit} />
             {field("name")}
           </> : step === 1 && draft.stage ? <>
-            <section className="grid gap-4">
+            {currentFields.includes("salesOrigin") && <section className="grid gap-4">
               {field("salesOrigin")}
               {draft.salesOrigin === "proyectado" && <ProjectionCalculator
                 taxBreakdown={{ required: !visible.includes("grossAnnualSales"), reducedAvailable: draft.activity === "5610" }}
@@ -292,21 +293,27 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
                   if (netAnnual !== undefined) update("annualSales", netAnnual.toFixed(2));
                 }} />}
               <div className="grid gap-5 sm:grid-cols-2">{currentFields.filter((id) => ["annualSales", "grossAnnualSales", "maxMonthlySales"].includes(id)).map(field)}</div>
-            </section>
-            <section className="grid gap-4 border-t border-border pt-4">
+            </section>}
+            {currentFields.includes("purchasesOrigin") && <section className="grid gap-4">
               {field("purchasesOrigin")}
               <div className="grid gap-5 sm:grid-cols-2">{currentFields.filter((id) => ["annualPurchases", "grossPurchases", "maxMonthlyPurchases"].includes(id)).map(field)}</div>
-            </section>
-          </> : (step === 0 && !draft.stage ? ["establishment", ...(draft.establishment ? ["stage" as const] : [])] as const : currentFields).map(field)}
+            </section>}
+          </> : currentFields.map(field)}
+          {!previous && !edit && <p className="text-sm text-slate-600">Tus respuestas se guardan en esta pestaña. {unfinished && <LinkButton href="/" variant="ghost" className="text-[#0a4db7]">Pausar evaluación</LinkButton>}</p>}
           {failure && <Notice tone="error">{failure}</Notice>}
           <div className="wizard-actions flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5">
             {edit?.returnToDiagnosis || (previous && !edit) ? <LinkButton href={diagnosisHref} variant="ghost">Cancelar</LinkButton>
               : edit ? <Button type="button" variant="ghost" onClick={() => endEdit(true)}>Cancelar</Button>
-                : chapter > 0 ? <Button type="button" variant="ghost" onClick={() => goTo(activeSteps[chapter - 1])}><ArrowLeft aria-hidden="true" /> Atrás</Button> : <span />}
+                : <Button type="button" variant="outline" disabled={chapter === 0 && position === 0} onClick={() => {
+                  if (position > 0) goTo(step, groups[position - 1][0]);
+                  else {
+                    const previousStep = activeSteps[chapter - 1];
+                    goTo(previousStep, groupsFor(previousStep).at(-1)?.[0]);
+                  }
+                }}><ArrowLeft aria-hidden="true" /> Atrás</Button>}
             <Button type="submit">{edit ? "Guardar cambio" : step === reviewStep ? "Ver mi diagnóstico" : "Continuar"} <ArrowRight aria-hidden="true" /></Button>
           </div>
         </form>
-      </Card>
     </div>
   </div>;
 }
@@ -433,8 +440,8 @@ function Review({ draft, visible, edit }: { draft: AssessmentDraft; visible: Ass
       if (!fields.length) return null;
       return <section key={steps[index].label} className="rounded-lg border border-border p-4">
         <h3 className="mb-2 font-bold">{steps[index].label}</h3>
-        <dl className="divide-y divide-border">
-          {fields.map((field) => <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-1.5" key={field}>
+        <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {fields.map((field) => <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50/60 p-4" key={field}>
             <dt className="text-sm text-muted-foreground">{assessmentFieldLabels[field]}</dt>
             <dd className="col-start-1 row-start-2 min-w-0 break-words font-semibold">{value(field) || "Sin indicar"}</dd>
             <dd className="col-start-2 row-span-2 row-start-1">
