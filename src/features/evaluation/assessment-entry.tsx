@@ -19,10 +19,10 @@ export function useUnfinishedAssessment() {
   return useSyncExternalStore(subscribeToAssessment, () => !loading && Boolean(readDraft(user?.uid)), () => false);
 }
 
-export function AssessmentEntry({ className }: { className?: string }) {
+export function AssessmentEntry({ className, startLabel = "Evaluar mi negocio" }: { className?: string; startLabel?: string }) {
   const active = useActiveAssessment();
   const unfinished = useUnfinishedAssessment();
   return <LinkButton href={active && !unfinished ? "/negocios?seccion=diagnostico" : "/negocios/nuevo"} size="lg" className={className}>
-    {unfinished ? "Continuar mi evaluación" : active ? "Volver a mi diagnóstico" : "Evaluar mi negocio"} <ArrowRight aria-hidden="true" />
+    {unfinished ? "Continuar mi evaluación" : active ? "Volver a mi diagnóstico" : startLabel} <ArrowRight aria-hidden="true" />
   </LinkButton>;
 }

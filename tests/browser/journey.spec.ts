@@ -19,12 +19,12 @@ test("inicio, validación, revisión y diagnóstico con datos completos", async 
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Formaliza tu negocio gastronómico");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Formaliza tu negocio gastronómico en Perú");
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "Saltar al contenido" })).toBeFocused();
   await noOverflow(page);
   await accessibility(page);
-  await page.getByRole("link", { name: "Evaluar mi negocio", exact: true }).click();
+  await page.getByRole("link", { name: "Comenzar ahora", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Evalúa tu negocio gastronómico", exact: true })).toBeVisible();
   await expect(page.getByLabel("Ventas anuales", { exact: true })).toHaveCount(0);
   if (info.project.name === "movil") {

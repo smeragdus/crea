@@ -15,7 +15,7 @@ test("la nube conserva la conversación, permite cerrarla con Escape y se restri
   await expect(dialog.getByText(/Proveedor de IA sin configurar/)).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(cloud).toBeFocused();
-  await page.getByRole("link", { name: "Evaluar mi negocio", exact: true }).click();
+  await page.getByRole("link", { name: "Comenzar ahora", exact: true }).click();
   await cloud.click();
   await expect(dialog.getByText(/Es el código que identifica/)).toBeVisible();
   const accessibility = await new AxeBuilder({ page }).include("#crea-cloud-panel").withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
