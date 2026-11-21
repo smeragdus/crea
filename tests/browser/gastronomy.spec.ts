@@ -38,15 +38,20 @@ test("una idea puede proyectar ventas sin RUC y guardar su ruta", async ({ page 
     expect(actionBounds.x + actionBounds.width).toBeLessThanOrEqual(cloudBounds.x);
   }
   await fillProfile(page, "Solo tengo una idea de negocio");
+  await expect(page.getByText("Para negocios gastronómicos del distrito de Cajamarca, Perú.")).toBeVisible();
+  await expect(page.getByLabel(/Provincia|Distrito/)).toHaveCount(0);
+  await page.getByRole("checkbox", { name: "Cocina a gas", exact: true }).check();
+  await page.getByRole("checkbox", { name: "Hornos, parrillas o freidoras", exact: true }).check();
+  await choose(page, /bastante humo/, "Sí");
   await expect(page.getByLabel("¿En qué régimen estás inscrito?")).toHaveCount(0);
-  await expect(page.getByRole("group", { name: /inscrito en el RUC/ })).toHaveCount(0);
+  await expect(page.getByRole("group", { name: /ya cuenta con RUC/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Continuar" }).click();
   await expect(page.getByRole("radio", { name: "Datos reales del ejercicio" })).toHaveCount(0);
   await fillOrigins(page, "Proyección del ejercicio", "Todavía no tengo cifras");
-  await page.getByText("Proyectar ventas por productos o servicios", { exact: true }).click();
-  await page.getByLabel("Precio promedio").fill("10");
-  await page.getByLabel("Pedidos diarios").fill("20");
-  await page.getByLabel("Días al mes").fill("20");
+  await page.getByText("Calcula cuánto podrías vender al mes", { exact: true }).click();
+  await page.getByLabel("Precio unitario").fill("10");
+  await page.getByLabel("Cantidad estimada al mes").fill("400");
+  await page.getByLabel("Nombre del plato, bebida o servicio").fill("Almuerzo");
   await page.getByRole("button", { name: "Calcular proyección" }).click();
   await page.getByRole("button", { name: "Usar proyección" }).click();
   await expect(page.getByLabel("Ingresos brutos anuales")).toHaveValue("48000.00");
@@ -73,15 +78,41 @@ for (const stage of ["Estoy preparando mi negocio", "Mi negocio ya funciona, per
   test("adapta inscripción, proyección y origen para: " + stage, async ({ page }) => {
     await page.goto("/negocios/nuevo");
     await fillProfile(page, stage);
-    await expect(page.getByRole("group", { name: /inscrito en el RUC/ })).toHaveCount(stage.includes("necesito formalizarlo") ? 1 : 0);
+    await expect(page.getByRole("group", { name: /ya cuenta con RUC/ })).toHaveCount(stage.includes("necesito formalizarlo") ? 1 : 0);
     await expect(page.getByLabel("¿En qué régimen estás inscrito?")).toHaveCount(0);
-    await choose(page, /Emites o necesitas emitir facturas/, "Sí");
+    await choose(page, /Necesitarás emitir facturas/, "Sí");
     await page.getByRole("button", { name: "Continuar" }).click();
     await fillOrigins(page, "Proyección del ejercicio", "Todavía no tengo cifras");
     await expect(page.getByLabel("Ingresos brutos anuales")).toHaveCount(0);
     await expect(page.getByLabel("Ventas anuales", { exact: true })).toBeVisible();
   });
 }
+
+test("una cafetería ambigua puede continuar y recuperar sus respuestas", async ({ page }) => {
+  await page.goto("/negocios/nuevo");
+  await choose(page, /Qué tipo de establecimiento/, "Cafetería");
+  await page.getByRole("radio", { name: /Solo tengo una idea de negocio/ }).check();
+  const description = page.getByLabel("Cuéntanos qué comidas o bebidas ofrecerás y cómo atenderás a tus clientes.");
+  await description.fill("Café y desayunos en mesas; todavía no sé qué venderé más.");
+  await page.getByRole("radio", { name: /Atención en el establecimiento/ }).check();
+  await page.getByRole("radio", { name: "Aún no puedo identificarla o mi actividad no figura" }).check();
+  await expect(page.getByText("Clasificación pendiente", { exact: true })).toBeVisible();
+  await page.getByRole("radio", { name: /A mi nombre/ }).check();
+  await choose(page, /A quiénes venderás principalmente/, "Personas y empresas");
+  await choose(page, /Necesitarás emitir facturas/, "Todavía no lo sé");
+  await choose(page, /pedidos por medios digitales/, "Sí");
+  await page.getByRole("checkbox", { name: "WhatsApp" }).check();
+  await page.getByRole("checkbox", { name: "Aplicaciones de delivery" }).check();
+  await page.reload();
+  await expect(page.getByRole("checkbox", { name: "WhatsApp" })).toBeChecked();
+  await expect(description).toHaveValue("Café y desayunos en mesas; todavía no sé qué venderé más.");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await fillOrigins(page, "Todavía no tengo cifras", "Todavía no tengo cifras");
+  await expect(page.getByLabel("Ventas anuales", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Atrás" }).click();
+  await choose(page, /pedidos por medios digitales/, "No");
+  await expect(page.getByRole("group", { name: "¿Por qué medios recibirás pedidos?" })).toHaveCount(0);
+});
 
 test("los casos ficticios se abren con simulador y formalización", async ({ page }) => {
   await page.goto("/");

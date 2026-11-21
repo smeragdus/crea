@@ -53,3 +53,25 @@ export function ChoiceField({ id, label, options, hint, error, value, onChange, 
     {error && <p id={id + "-error"} className="mt-2 text-sm font-semibold text-destructive">{error}</p>}
   </fieldset>;
 }
+
+export function MultiChoiceField({ id, label, options, hint, value, onChange }: CommonProps & {
+  options: readonly (readonly [string, string])[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const selected = value.split(",").filter(Boolean);
+  return <fieldset id={id} tabIndex={-1} aria-describedby={hint ? id + "-hint" : undefined}>
+    <legend className="font-semibold">{label}</legend>
+    {hint && <p id={id + "-hint"} className="mt-1 text-sm text-muted-foreground">{hint}</p>}
+    <div className="mt-2.5 grid gap-2">
+      {options.map(([key, text]) => <label className="choice-card" key={key}>
+        <input type="checkbox" name={id} value={key} checked={selected.includes(key)} onChange={(event) => {
+          if (!event.target.checked) onChange(selected.filter((item) => item !== key).join(","));
+          else if (key === "unknown") onChange(key);
+          else onChange([...selected.filter((item) => item !== "unknown"), key].join(","));
+        }} />
+        <span className="text-sm font-semibold">{text}</span>
+      </label>)}
+    </div>
+  </fieldset>;
+}

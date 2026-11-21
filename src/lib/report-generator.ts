@@ -3,6 +3,9 @@ import { seedCatalog } from "./seed-catalog";
 import { getRestaurantObligations } from "./sunat-calendar";
 import type { BusinessContext, TaxRegimeCode } from "./types";
 
+const customerLabels: Record<BusinessContext["customerType"], string> = {
+  personas: "Personas", empresas: "Empresas o instituciones", ambos: "Personas y empresas", "aun-no-se": "Sin indicar",
+};
 const money = new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" });
 
 function formatAmount(value?: number) {
@@ -27,6 +30,8 @@ export function buildDiagnosticReportData(
   const obligations = declared ? getRestaurantObligations(context, "", declared as TaxRegimeCode, evaluation.taxRecommendations).obligations : [];
   obligations.forEach(({ sourceId }) => activeSources.add(sourceId));
   const formData: Array<[string, string, string]> = [
+    ["RUC declarado", formatBoolean(context.hasRuc), "hasRuc"],
+    ["Tipo de clientes", customerLabels[context.customerType] ?? "Sin indicar", "customerType"],
     ["Actividad económica (CIIU)", context.ciiu ?? "Clasificación pendiente", "ciiu"],
     ["Tipo de registro", context.legalPerson === "natural" ? "Persona natural con negocio" : context.legalPerson === "juridica" ? "Persona jurídica" : "Sin indicar", "personType"],
     ["Ventas anuales", formatAmount(context.annualRevenue), "annualRevenue"],

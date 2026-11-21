@@ -18,6 +18,9 @@ function contextualHelp(context: Context | null, topic?: AssistantTopic) {
     const entry = ciiuCatalog[context.code];
     return context.code + " · " + entry.name + ". " + entry.reason;
   }
+  if ((topic === "ciiu" || topic === "mixed") && context?.stageAnswered) {
+    return "Si aún no confirmaste el código, indica qué actividad predomina: comidas de consumo inmediato, bebidas, eventos puntuales o contratos continuos. Si falta esa información, deja la clasificación pendiente.";
+  }
 }
 const subscribeToHydration = () => () => {};
 const Register = createContext<(value: Context | null) => void>(() => {});

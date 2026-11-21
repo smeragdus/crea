@@ -69,3 +69,13 @@ Los recorridos del emulador crean y califican participantes ficticios en el proy
 | `pnpm test:e2e:firebase` | 1 recorrido aprobado con Auth y Firestore en el proyecto local `demo-crea`. Cubre registro, acceso administrativo, persistencia de una evaluación, pretest, postest, restricción del asistente y exportación CSV con datos ficticios. |
 
 Se comprobó también que el panel abierto conserva su conversación al cambiar de ruta, que el movimiento reducido desactiva su animación y que la nube deja espacio para los botones del cuestionario en los tamaños verificados.
+
+## Cuestionario para el distrito de Cajamarca
+
+El recorrido inicia con el tipo de establecimiento y pide una sola descripción. El tipo identifica el formato del negocio y no confirma la clase CIIU. La descripción y la modalidad ordenan las opciones del catálogo del INEI. El recorrido evita volver a preguntar la modalidad principal para cocinas exclusivamente de delivery y puestos móviles. La clasificación requiere confirmación expresa o puede quedar pendiente.
+
+Las evaluaciones generadas con el formulario usan Cajamarca como departamento, provincia y distrito. La ruta municipal remite a la Municipalidad Provincial de Cajamarca. Los borradores anteriores conservan las respuestas vigentes al retomarlos y solicitan el tipo de establecimiento si todavía falta. Las evaluaciones históricas se conservan como se guardaron hasta que el usuario decide editarlas.
+
+El RUC se consulta para negocios que ya operan. La inscripción societaria se consulta a personas jurídicas en preparación o en funcionamiento. Los canales de pedidos y los datos sobre cocina son opcionales. El formulario consulta los canales si se reciben pedidos digitales. La ruta usa los equipos y el humo declarado para ayudar a preparar la consulta municipal. El nivel de riesgo sigue siendo el declarado como asignado por la municipalidad.
+
+La calculadora admite cantidades mensuales por plato, bebida o servicio y mantiene el cálculo por pedidos diarios y los ajustes estacionales. El resultado conserva la distinción entre ingresos brutos, ingresos netos, máximos mensuales y cifras pendientes. Los regímenes se calculan con las mismas reglas y topes.

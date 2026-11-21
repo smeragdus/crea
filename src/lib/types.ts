@@ -25,7 +25,13 @@ export type BusinessContext = {
   stage?: BusinessStage;
   financialOrigins?: { sales: FinancialOrigin; purchases: FinancialOrigin };
   ciiuClassification?: { version: string; primary: string; secondary: string[] };
-  operationMode?: "local" | "delivery" | "eventos" | "movil" | "desconocido";
+  establishment?: "restaurante" | "cafeteria" | "polleria" | "cevicheria" | "pizzeria" | "menu" | "rapida" | "delivery" | "movil" | "otro";
+  digitalOrders?: boolean;
+  orderChannels?: string[];
+  kitchenEquipment?: string[];
+  kitchenSmoke?: boolean;
+  constitutionRegistered?: boolean;
+  operationMode?: "local" | "recojo" | "delivery" | "eventos" | "movil" | "desconocido";
   grossAnnualRevenue?: number;
   grossAnnualPurchases?: number;
   domiciledInPeru?: boolean;

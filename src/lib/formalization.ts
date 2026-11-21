@@ -10,6 +10,7 @@ export type FormalizationTask = {
 const identity = "Identidad y registro";
 const operation = "Permisos y operación";
 const localRule = "https://www.gob.pe/institucion/municajamarca/normas-legales/5518154-om_895-2024";
+const rucSource = "https://emprender.sunat.gob.pe/ruc/mi-ruc/inscripcion-ruc";
 const generalLicense = "https://www.gob.pe/20844-obtener-licencia-de-funcionamiento-para-negocios-de-riesgo-bajo-o-medio";
 
 export function buildFormalizationRoute(context: BusinessContext): FormalizationTask[] {
@@ -21,27 +22,34 @@ export function buildFormalizationRoute(context: BusinessContext): Formalization
   const municipality = central ? "Municipalidad Provincial de Cajamarca" : "Municipalidad competente en " + location;
   const knownRegime = context.currentRegime && !["SIN_REGIMEN", "DESCONOCIDO"].includes(context.currentRegime);
   const juridica = context.legalPerson === "juridica";
+  const natural = context.legalPerson === "natural";
   const planned = context.stage === "idea" || context.stage === "preparacion";
   const fixedPlace = context.hasLocal ?? (context.hasPhysicalLocation ? true : undefined);
   const unknownActivity = !context.ciiu;
   const tasks: FormalizationTask[] = [
-    { id: "form", title: "Definir la forma de operar", phase: identity, institution: "SUNARP",
-      description: "Decide si operarás a tu nombre o mediante una empresa.",
-      steps: practicalGuides.sunarp.steps, url: practicalGuides.sunarp.officialUrl,
+    { id: "form", title: "Definir la forma de operar", phase: identity, institution: natural ? "SUNAT" : "SUNARP",
+      description: natural ? "Has elegido operar a tu nombre como persona natural con negocio." : "Decide si operarás a tu nombre o mediante una empresa.",
+      steps: natural ? ["Revisa cómo declarar tu actividad económica y domicilio fiscal ante SUNAT."] : practicalGuides.sunarp.steps,
+      url: natural ? rucSource : practicalGuides.sunarp.officialUrl,
       declaredComplete: Boolean(!planned && context.hasRuc && context.legalPerson !== "aun-no-se") },
   ];
   if (juridica) tasks.push({
-    id: "sunarp", title: !planned && context.hasRuc ? "Revisar los datos de constitución" : "Inscribir la empresa", phase: identity, institution: "SUNARP",
-    after: "Definir la forma de operar", description: "Define el tipo de empresa y registra la constitución en SUNARP.",
+    id: "sunarp",
+    title: context.constitutionRegistered === true ? "Revisar la inscripción de la empresa"
+      : context.stage === "idea" || context.constitutionRegistered === false ? "Inscribir la empresa" : "Confirmar si la empresa está inscrita",
+    phase: identity, institution: "SUNARP", declaredComplete: context.constitutionRegistered === true,
+    after: "Definir la forma de operar", description: "Confirma el estado de la inscripción de la persona jurídica ante SUNARP.",
     steps: ["Define el tipo de empresa, los socios y los aportes.", "Organiza el acto constitutivo y revisa las modalidades de inscripción en SUNARP."],
     url: practicalGuides.sunarp.officialUrl,
   });
   tasks.push(
-    { id: "ruc", title: context.hasRuc ? "Revisar o actualizar la ficha RUC" : "Consultar o inscribir el RUC", phase: identity, institution: "SUNAT",
+    { id: "ruc", title: context.hasRuc === true ? "Revisar o actualizar la ficha RUC" : context.hasRuc === false ? "Inscribir el negocio en el RUC" : "Confirmar si el negocio tiene RUC", phase: identity, institution: "SUNAT",
       after: juridica ? "Inscribir la empresa si corresponde" : "Definir la forma de operar",
-      description: context.hasRuc ? "Verifica el estado, domicilio fiscal y actividades registradas." : "Confirma si ya existe una inscripción y tramítala si corresponde.",
+      description: context.hasRuc === true ? "Verifica el estado, domicilio fiscal y actividades registradas."
+        : context.hasRuc === false ? "Prepara los datos de la actividad y tramita la inscripción ante SUNAT."
+          : "Confirma si ya existe una inscripción y tramítala si corresponde.",
       steps: ["Identifica tu actividad principal y las actividades secundarias.", "Revisa el domicilio fiscal y la fecha de inicio.", "Si constituiste una empresa, verifica la activación de su RUC."],
-      url: "https://emprender.sunat.gob.pe/ruc/mi-ruc/inscripcion-ruc" },
+      url: rucSource },
     { id: "regime", title: knownRegime ? "Verificar el régimen tributario" : "Evaluar el régimen tributario", phase: identity, institution: "SUNAT",
       after: "Preparar o revisar la ficha RUC", description: "Compara compatibilidad, comprobantes y obligaciones con los datos de tu escenario.",
       steps: ["Revisa los requisitos y responde los datos pendientes del diagnóstico.", "Consulta cuándo corresponde inscribirte o cambiar de régimen."],
@@ -51,6 +59,7 @@ export function buildFormalizationRoute(context: BusinessContext): Formalization
       steps: practicalGuides.comprobantes.steps, url: practicalGuides.comprobantes.officialUrl },
   );
   if (fixedPlace === true) {
+    const equipment = context.kitchenEquipment?.filter((key) => key !== "unknown") ?? [];
     const high = context.municipalRisk === "alto";
     const low = context.municipalRisk === "bajo-medio";
     const license: FormalizationTask = {
@@ -66,8 +75,12 @@ export function buildFormalizationRoute(context: BusinessContext): Formalization
       description: high ? "Para riesgo alto o muy alto, el certificado precede a la licencia."
         : low ? "Para riesgo bajo o medio, la ITSE puede tramitarse después de la licencia."
           : "El orden depende del riesgo que determine la municipalidad.",
-      steps: ["Consulta qué documentos y medidas de seguridad corresponden a la edificación."],
-      url: high ? "https://www.gob.pe/20866-obtener-licencia-de-funcionamiento-para-negocios-de-riesgo-alto-o-muy-alto" : municipalSource,
+      steps: [
+        "Consulta qué documentos y medidas de seguridad corresponden a la edificación.",
+        ...(equipment.length ? ["Lleva una lista de los equipos de cocina, su ubicación y el tipo de energía que usan."] : []),
+        ...(context.kitchenSmoke === true ? ["Describe dónde se genera humo, vapor o grasa para consultar las condiciones de ventilación aplicables."] : []),
+      ],
+      url: high && !central ? "https://www.gob.pe/20866-obtener-licencia-de-funcionamiento-para-negocios-de-riesgo-alto-o-muy-alto" : municipalSource,
       conditional: !high && !low, declaredComplete: context.itseStatus === "yes",
     };
     tasks.push(...(high ? [itse, license] : [license, itse]));

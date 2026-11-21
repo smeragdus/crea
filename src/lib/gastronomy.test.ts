@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emptyDraft, fromBusinessContext, relevantAssessmentFields, toBusinessContext, validateAssessmentStep, type AssessmentDraft } from "@/features/evaluation/assessment";
+import { emptyDraft, fromBusinessContext, relevantAssessmentFields, restoreAssessmentDraft, toBusinessContext, validateAssessmentStep, type AssessmentDraft } from "@/features/evaluation/assessment";
 import { CIIU_VERSION, confirmedClassification, suggestedCodes } from "./ciiu-catalog";
 import { RuleEngine } from "./rule-engine";
 import { buildFormalizationRoute } from "./formalization";
@@ -8,12 +8,12 @@ import { simulateRestaurantTaxes } from "./tax-simulator";
 import { localAssistantTopic } from "./assistant-topics";
 
 const base: AssessmentDraft = {
-  ...emptyDraft, stage: "formalizado", description: "Restaurante de menú", activity: "5610", activityEvidence: "5610",
+  ...emptyDraft, establishment: "restaurante", stage: "formalizado", description: "Restaurante de menú", activity: "5610", activityEvidence: "5610",
   legal: "natural", mode: "local", rucStatus: "yes", regime: "NRUS", customers: "personas", invoice: "no",
   salesOrigin: "real", purchasesOrigin: "real", annualSales: "90000", grossAnnualSales: "96000", maxMonthlySales: "8000",
   annualPurchases: "60000", grossPurchases: "66000", maxMonthlyPurchases: "6000", locations: "1", assets: "20000",
   workers: "10", workforce: "yes", domicile: "yes", foreignBranch: "no", linkage: "no", priorRmt: "no",
-  nrusRestriction: "no", rerRestriction: "no", province: "Cajamarca", district: "Cajamarca",
+  nrusRestriction: "no", rerRestriction: "no",
 };
 
 describe("Evaluación gastronómica por etapas", () => {
@@ -27,6 +27,43 @@ describe("Evaluación gastronómica por etapas", () => {
     expect(toBusinessContext(draft).financialOrigins?.sales).toBe(draft.salesOrigin);
     expect(toBusinessContext(draft).currentRegime).toBe(planning ? "SIN_REGIMEN" : "NRUS");
     expect(fields).not.toContain("fixedPlace");
+  });
+
+  it("restaura borradores sin perder cifras y fija Cajamarca sin volver a preguntar", () => {
+    const legacy = { ...base, province: "Jaén", district: "Jaén" };
+    const draft = restoreAssessmentDraft(legacy);
+    expect(draft.annualSales).toBe(base.annualSales);
+    expect(draft).not.toHaveProperty("province");
+    expect(toBusinessContext(draft)).toMatchObject({ department:"Cajamarca", province:"Cajamarca", district:"Cajamarca" });
+  });
+
+  it("conserva una factura desconocida y las diferencias de inscripción", () => {
+    const unknown = toBusinessContext({ ...base, invoice:"unknown", rucStatus:"unknown" });
+    expect(unknown.needsInvoices).toBeNull();
+    expect(unknown.hasRuc).toBeUndefined();
+    expect(buildFormalizationRoute(unknown).find(({ id }) => id === "ruc")?.title).toMatch(/Confirmar/);
+    expect(buildFormalizationRoute(toBusinessContext({ ...base, rucStatus:"no" })).find(({ id }) => id === "ruc")?.title).toMatch(/Inscribir/);
+    expect(buildFormalizationRoute(toBusinessContext(base)).find(({ id }) => id === "ruc")?.title).toMatch(/Revisar/);
+  });
+
+  it("usa equipos y humo solo en la orientación municipal", () => {
+    const context = toBusinessContext({ ...base, equipment:"gas,oven", smoke:"yes", onlineOrders:"yes", channels:"web,apps" });
+    expect(context.kitchenEquipment).toEqual(["gas","oven"]);
+    expect(context.orderChannels).toEqual(["apps","web"]);
+    expect(context.municipalRisk).toBeUndefined();
+    expect(buildFormalizationRoute(context).find(({ id }) => id === "itse")?.steps.join(" ")).toMatch(/ventilación/);
+    expect(RuleEngine.recommendTax(context)).toEqual(RuleEngine.recommendTax(toBusinessContext(base)));
+    expect(toBusinessContext({ ...base, mode:"delivery", fixedPlace:"no" }).hasLocal).toBe(false);
+    expect(relevantAssessmentFields({ ...base, onlineOrders:"no" })).not.toContain("channels");
+  });
+
+  it("distingue constitución en preparación y operación de una persona jurídica", () => {
+    expect(relevantAssessmentFields({ ...base, legal:"juridica" })).toContain("constituted");
+    expect(relevantAssessmentFields({ ...base, stage:"preparacion", legal:"juridica" })).toContain("constituted");
+    expect(relevantAssessmentFields({ ...base, stage:"idea", legal:"juridica" })).not.toContain("constituted");
+    expect(relevantAssessmentFields(base)).not.toContain("constituted");
+    const completed = toBusinessContext({ ...base, legal:"juridica", constituted:"yes" });
+    expect(buildFormalizationRoute(completed).find(({ id }) => id === "sunarp")?.declaredComplete).toBe(true);
   });
 
   it("distingue proyecciones, desconocidos y ceros explícitos", () => {
@@ -44,6 +81,14 @@ describe("Evaluación gastronómica por etapas", () => {
     expect(legal[2].evaluatedRules.find(({ ruleId }) => ruleId === "TR-RMT-03")?.passed).toBe(false);
     expect(RuleEngine.recommendTax(toBusinessContext({ ...base, grossPurchases: "96000.01" }))[0].compatible).toBe(false);
     expect(RuleEngine.recommendTax(toBusinessContext({ ...base, annualPurchases: "525000.01" }))[1].compatible).toBe(false);
+  });
+
+  it("distingue el estado registral de una pollería y la factura de un restaurante formalizado", () => {
+    const polleria = toBusinessContext({ ...base, establishment:"polleria", stage:"operando", rucStatus:"no" });
+    expect(polleria).toMatchObject({ establishment:"polleria", purpose:"formalizar", hasRuc:false, currentRegime:"SIN_REGIMEN" });
+    const formal = toBusinessContext({ ...base, invoice:"yes", customers:"empresas" });
+    expect(formal).toMatchObject({ needsInvoices:true, customerType:"empresas", hasRuc:true });
+    expect(RuleEngine.recommendTax(formal).find(({ code }) => code === "NRUS")?.status).toBe("INCOMPATIBLE");
   });
 
   it("registra las condiciones que faltan y preserva el dato tras editar", () => {
@@ -91,6 +136,8 @@ describe("Ruta y proyecciones", () => {
     const result = projectSales([{ price: "10", orders: "20", days: "20" }, { price: "20", orders: "5", days: "10" }],
       { highMonths: "3", highPercent: "20", lowMonths: "2", lowPercent: "10" });
     expect(result.value).toEqual({ regularMonth: 5000, maxMonth: 6000, lowMonth: 4500, annual: 62000 });
+    const monthly = projectSales([{ price:"10", orders:"", days:"", monthlyOrders:"400" }], { highMonths:"", highPercent:"", lowMonths:"", lowPercent:"" });
+    expect(monthly.value?.annual).toBe(48000);
     const simulation = simulateRestaurantTaxes(toBusinessContext(base), { grossMonthlySales: result.value?.regularMonth });
     expect(simulation.regimes.NRUS.totalMonthlyTaxEstimated).toBe(20);
     expect(projectSales([{ price: "10", orders: "5", days: "32" }],

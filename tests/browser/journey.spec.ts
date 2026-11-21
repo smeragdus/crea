@@ -31,7 +31,7 @@ test("inicio, validación, revisión y diagnóstico con datos completos", async 
     await page.screenshot({ path: info.outputPath("crea-evaluacion-movil.png"), fullPage: true });
   }
   await page.getByRole("button", { name: "Continuar" }).click();
-  await expect(page.getByText("Selecciona la etapa de tu negocio.")).toBeVisible();
+  await expect(page.getByText("Selecciona un tipo de establecimiento.")).toBeVisible();
   await expect(page.getByLabel("Nombre del restaurante (opcional)")).toHaveCount(0);
   await basicAnswers(page);
   await page.getByRole("button", { name: "Continuar" }).click();
@@ -227,7 +227,7 @@ test("régimen desconocido, preguntas condicionales y resultado incompatible", a
   await page.goto("/negocios/nuevo");
   await basicAnswers(page, "DESCONOCIDO");
   await page.getByRole("radio", { name: /Como empresa/ }).check();
-  await expect(page.getByRole("group", { name: "¿Emites o necesitas emitir facturas de venta?" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "¿Necesitarás emitir facturas a tus clientes?" })).toBeVisible();
   await page.getByRole("button", { name: "Continuar" }).click();
   await fillOrigins(page);
   await expect(page.getByLabel("Ventas del mes más alto")).toHaveCount(0);

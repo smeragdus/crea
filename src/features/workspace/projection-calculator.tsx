@@ -4,13 +4,13 @@ import { Calculator, Plus, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SelectField, TextField } from "@/features/evaluation/assessment-fields";
-import { projectSales, type SalesLine, type SalesProjection, type Season } from "@/lib/sales-projection";
+import { monthlySalesSubtotal, projectSales, type SalesLine, type SalesProjection, type Season } from "@/lib/sales-projection";
 import { soles } from "@/lib/utils";
 import { IGV_GENERAL, IGV_RESTAURANTS_2026 } from "@/lib/tax-constants";
 import { salesWithoutIgv } from "@/lib/tax-simulator";
 
-const blank = { price: "", orders: "", days: "" };
-const lineFields = [["price", "Precio promedio"], ["orders", "Pedidos diarios"], ["days", "Días al mes"]] as const;
+const blank = { name: "", price: "", orders: "", days: "", monthlyOrders: "" };
+const dailyFields = [["orders", "Pedidos diarios"], ["days", "Días al mes"]] as const;
 const seasonFields = [["highMonths", "Meses de alta demanda"], ["highPercent", "Aumento (%)"], ["lowMonths", "Meses de baja demanda"], ["lowPercent", "Disminución (%)"]] as const;
 
 export function ProjectionCalculator({ onApply, selectMonth, taxBreakdown }: {
@@ -20,36 +20,50 @@ export function ProjectionCalculator({ onApply, selectMonth, taxBreakdown }: {
 }) {
   const id = useId();
   const [lines, setLines] = useState([{ key: 0, ...blank }]);
+  const [daily, setDaily] = useState(false);
   const [next, setNext] = useState(1);
   const [season, setSeason] = useState<Season>({ highMonths: "", highPercent: "", lowMonths: "", lowPercent: "" });
   const [requested, setRequested] = useState(false);
   const [applied, setApplied] = useState(false);
   const [month, setMonth] = useState<"regularMonth" | "maxMonth" | "lowMonth">("regularMonth");
   const [tax, setTax] = useState("");
-  const result = requested ? projectSales(lines, season) : undefined;
+  const lineForCalculation = (line: typeof blank): SalesLine => ({
+    price: line.price, orders: line.orders, days: line.days, monthlyOrders: daily ? undefined : line.monthlyOrders,
+  });
+  const result = requested ? projectSales(lines.map(lineForCalculation), season) : undefined;
   const rate = tax === "general" ? IGV_GENERAL : tax === "special" ? IGV_RESTAURANTS_2026 : tax === "none" ? 0 : undefined;
 
   function reset() { setRequested(false); setApplied(false); }
-  function changeLine(key: number, field: keyof SalesLine, value: string) {
+  function changeLine(key: number, field: keyof typeof blank, value: string) {
     setLines((previous) => previous.map((line) => line.key === key ? { ...line, [field]: value } : line));
     reset();
   }
 
   return <details className="projection-box rule-details rounded-xl border border-border bg-muted px-4 pb-2">
-    <summary><Calculator size={18} className="mr-2 inline" aria-hidden="true" /> Proyectar ventas por productos o servicios</summary>
+    <summary><Calculator size={18} className="mr-2 inline" aria-hidden="true" /> Calcula cuánto podrías vender al mes</summary>
     <div className="grid gap-4 py-3">
       <p className="text-sm text-muted-foreground">Calcula ingresos cobrados antes de gastos. Agrega una fila por cada tipo de pedido para evitar contarlos dos veces.</p>
-      {lines.map((line, index) => <fieldset key={line.key} className="rounded-lg border border-border bg-card p-3">
-        <legend className="px-1 font-bold">Producto o servicio {index + 1}</legend>
-        <div className="grid gap-3 sm:grid-cols-3">{lineFields.map(([field, label]) =>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={daily} onChange={(event) => { setDaily(event.target.checked); reset(); }} />
+        Estimar a partir de pedidos diarios
+      </label>
+      {lines.map((line, index) => {
+        const subtotal = monthlySalesSubtotal(lineForCalculation(line));
+        const lineFields = [["price", "Precio unitario"], ...(daily ? dailyFields : [["monthlyOrders", "Cantidad estimada al mes"]] as const)] as const;
+        return <fieldset key={line.key} className="rounded-lg border border-border bg-card p-3">
+        <legend className="px-1 font-bold">Plato, bebida o servicio {index + 1}</legend>
+        <TextField id={id + line.key + "name"} label="Nombre del plato, bebida o servicio" value={line.name} maxLength={80} onChange={(value) => changeLine(line.key, "name", value)} />
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">{lineFields.map(([field, label]) =>
           <TextField key={field} id={id + line.key + field} label={label} value={line[field]} numeric whole={field !== "price"} maxLength={10} onChange={(value) => changeLine(line.key, field, value)} />)}</div>
+        {subtotal !== undefined && <p className="mt-2 text-sm">Subtotal mensual: {soles(subtotal)}</p>}
         {lines.length > 1 && <Button type="button" variant="ghost" className="mt-2" onClick={() => {
           setLines((previous) => previous.filter(({ key }) => key !== line.key)); reset();
         }}><Trash2 aria-hidden="true" /> Quitar producto {index + 1}</Button>}
-      </fieldset>)}
+      </fieldset>;
+      })}
       <Button type="button" variant="outline" className="justify-self-start" disabled={lines.length === 12} onClick={() => {
         setLines((previous) => [...previous, { key: next, ...blank }]); setNext(next + 1); reset();
-      }}><Plus aria-hidden="true" /> Agregar producto o servicio</Button>
+      }}><Plus aria-hidden="true" /> Agregar plato, bebida o servicio</Button>
       <details className="rule-details">
         <summary>Ajustar por temporadas</summary>
         <div className="grid gap-3 py-2 sm:grid-cols-2">{seasonFields.map(([field, label]) =>
@@ -62,7 +76,7 @@ export function ProjectionCalculator({ onApply, selectMonth, taxBreakdown }: {
       {result?.value && <>
         <dl className="grid gap-3 rounded-lg bg-card p-3 text-sm sm:grid-cols-3" aria-live="polite">
           {[
-            ["Un mes regular", result.value.regularMonth],
+            ["Total mensual estimado", result.value.regularMonth],
             ["Mes de mayor venta", result.value.maxMonth],
             ["Total anual", result.value.annual],
           ].map(([label, amount]) => <div key={label}><dt>{label}</dt><dd className="text-lg font-bold">{soles(Number(amount))}</dd></div>)}

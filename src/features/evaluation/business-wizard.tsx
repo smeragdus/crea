@@ -9,14 +9,13 @@ import { SourceLink } from "@/components/ui/primitives";
 import { useAssistantContext } from "@/features/assistant/cloud";
 import { localAssistantTopic } from "@/lib/assistant-topics";
 import { ciiuCatalog, isCiiuCode } from "@/lib/ciiu-catalog";
-import { locations } from "@/lib/locations";
 import { ClassificationField } from "./classification";
 import { ProjectionCalculator } from "@/features/workspace/projection-calculator";
 import { LinkButton, Notice, PageHeading } from "@/components/ui/primitives";
 import { useSession } from "@/features/auth/session";
 import { useUnfinishedAssessment } from "./assessment-entry";
-import { activities, assessmentFieldLabels, assessmentFields, choices, customers, emptyDraft, fromBusinessContext, isPlanning, modes, origins, regimes, registration, relevantAssessmentFields, risks, stages, toBusinessContext, validateAssessmentStep, type AssessmentDraft, type AssessmentField } from "./assessment";
-import { ChoiceField, SelectField, TextField } from "./assessment-fields";
+import { activities, digitalChannels, establishments, kitchenEquipment, selectionOptions, assessmentFieldLabels, assessmentFields, choices, customers, declaredMode, restoreAssessmentDraft, fromBusinessContext, isPlanning, modes, origins, regimes, registration, relevantAssessmentFields, risks, stages, toBusinessContext, validateAssessmentStep, type AssessmentDraft, type AssessmentField } from "./assessment";
+import { ChoiceField, MultiChoiceField, SelectField, TextField } from "./assessment-fields";
 import { limaDay, readAssessment, readDraft, saveAssessment, storeDraft, type AssessmentSnapshot, type DraftSnapshot } from "./session-storage";
 
 const steps = [
@@ -65,12 +64,12 @@ function AssessmentEditor({ loading, uid, requestedField, editing }: { loading: 
 function Wizard({ uid, previous, restored, requestedField }: { uid?: string; previous?: AssessmentSnapshot; restored?: DraftSnapshot; requestedField?: AssessmentField }) {
   const router = useRouter();
   const unfinished = useUnfinishedAssessment();
-  const [draft, setDraft] = useState<AssessmentDraft>(() => previous ? fromBusinessContext(previous.context) : { ...emptyDraft, ...restored?.answers });
+  const [draft, setDraft] = useState<AssessmentDraft>(() => previous ? fromBusinessContext(previous.context) : restoreAssessmentDraft(restored?.answers));
   const [step, setStep] = useState(() => {
     if (previous) return reviewStep;
     if (!restored) return 0;
     const visible = relevantAssessmentFields(draft);
-    if (!draft.stage) return 0;
+    if (!draft.establishment || !draft.stage) return 0;
     const restoredStep = assessmentFields[restored.step];
     return restoredStep?.some((field) => visible.includes(field)) ? restored.step : reviewStep;
   });
@@ -122,8 +121,10 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
         if (next.salesOrigin === "real") next.salesOrigin = "";
         if (next.purchasesOrigin === "real") next.purchasesOrigin = "";
       }
-      if (key === "province" && current.province !== value) next.district = "";
-      if (key === "description" && current.description !== value && isCiiuCode(current.activity)) next.activity = "";
+      if ((key === "description" && current.description !== value || declaredMode(current) !== declaredMode(next)) && isCiiuCode(current.activity)) {
+        next.activity = "";
+        next.activityEvidence = "";
+      }
       return next;
     });
     setErrors((current) => ({ ...current, [key]: undefined }));
@@ -198,6 +199,11 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
       return;
     }
 
+    if (step === 0 && !draft.establishment) {
+      setErrors({ establishment: "Selecciona un tipo de establecimiento." });
+      focusField("establishment");
+      return;
+    }
     if (step === 0 && !draft.stage) {
       setErrors({ stage: "Selecciona la etapa de tu negocio." });
       focusField("stage");
@@ -230,14 +236,14 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
   const currentFields = edit ? edit.fields.filter((field, index) => index === 0 || visible.includes(field))
     : assessmentFields[step].filter((field) => visible.includes(field));
   const field = (id: AssessmentField) => id === "activity" && draft.stage ?
-    <ClassificationField key={id} description={draft.description} evidence={draft.activityEvidence} primary={draft.activity}
+    <ClassificationField key={id} description={draft.description} mode={declaredMode(draft)} evidence={draft.activityEvidence} primary={draft.activity}
       secondary={draft.secondary} error={errors.activity} onPrimary={(value) => update("activity", value)}
       onEvidence={(value) => update("activityEvidence", value)} onSecondary={(value) => update("secondary", value)} /> :
     <Question key={id} id={id} draft={draft} value={draft[id]} error={errors[id]} onChange={(value) => update(id, value)} />;
 
   return <div className="container-site page-shell">
     <PageHeading title={previous ? "Actualiza tu evaluación" : "Evalúa tu negocio gastronómico"}
-      description={previous ? previous.context.businessName || undefined : restored ? "Tu borrador se recuperó en esta pestaña." : undefined}
+      description={previous ? previous.context.businessName || undefined : restored ? "Tu borrador se recuperó en esta pestaña." : "Para negocios gastronómicos del distrito de Cajamarca, Perú."}
       actions={!previous && !edit && unfinished && <LinkButton href="/" variant="ghost">Pausar evaluación</LinkButton>} />
     <div className="wizard-grid">
       <nav className="wizard-nav" aria-label="Progreso de la evaluación">
@@ -291,7 +297,7 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
               {field("purchasesOrigin")}
               <div className="grid gap-5 sm:grid-cols-2">{currentFields.filter((id) => ["annualPurchases", "grossPurchases", "maxMonthlyPurchases"].includes(id)).map(field)}</div>
             </section>
-          </> : (step === 0 && !draft.stage ? ["stage" as const] : currentFields).map(field)}
+          </> : (step === 0 && !draft.stage ? ["establishment", ...(draft.establishment ? ["stage" as const] : [])] as const : currentFields).map(field)}
           {failure && <Notice tone="error">{failure}</Notice>}
           <div className="wizard-actions flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5">
             {edit?.returnToDiagnosis || (previous && !edit) ? <LinkButton href={diagnosisHref} variant="ghost">Cancelar</LinkButton>
@@ -318,31 +324,35 @@ const numberQuestions = {
 } as const;
 
 type QuestionProps = { id: AssessmentField; draft: AssessmentDraft; value: string; error?: string; onChange: (value: string) => void };
-const provinces = [...new Set(locations.filter(({ department }) => department === "Cajamarca").map(({ province }) => province))].sort();
 
 function Question({ draft, ...props }: QuestionProps) {
   switch (props.id) {
+    case "establishment":
+      return <ChoiceField {...props} label="¿Qué tipo de establecimiento tienes o quisieras abrir?" options={establishments} />;
     case "stage":
       return <ChoiceField {...props} label="¿En qué etapa está tu negocio?" options={stages} />;
     case "description":
-      return <TextField {...props} label="Describe lo que ofrece tu negocio" hint="Ejemplo: vendo almuerzos por delivery y atiendo celebraciones por encargo. Evita incluir datos personales." maxLength={500} />;
+      return <TextField {...props} label="Cuéntanos qué comidas o bebidas ofrecerás y cómo atenderás a tus clientes." hint="Ejemplo: prepararé desayunos, café y postres para consumir en el local y para llevar." maxLength={500} />;
     case "mode":
-      return <ChoiceField {...props} label="¿Cómo atenderás a tus clientes?" options={modes} />;
+      return <ChoiceField {...props} label="¿Cómo ofrecerás principalmente tus comidas o bebidas?" hint="Elige la modalidad principal. Si también atiendes de otras maneras, indícalo en tu descripción." options={modes} />;
     case "fixedPlace":
       return <ChoiceField {...props} label="¿Tienes o tendrás un local fijo para preparar, almacenar o vender?" options={choices} compact />;
-    case "province":
-      return <SelectField {...props} label="Provincia de Cajamarca" hint="La municipalidad depende de dónde operes.">
-        <option value="">Aún no está definida</option>
-        {provinces.map((province) => <option key={province}>{province}</option>)}
-      </SelectField>;
-    case "district":
-      return <TextField {...props} label="Distrito" hint="Escribe el distrito de operación si ya lo conoces." maxLength={70} />;
+    case "onlineOrders":
+      return <ChoiceField {...props} label="¿Recibirás pedidos por medios digitales?" options={choices} compact />;
+    case "channels":
+      return <MultiChoiceField {...props} label="¿Por qué medios recibirás pedidos?" hint="Puedes seleccionar varios medios. Esta respuesta es opcional." options={digitalChannels} />;
+    case "equipment":
+      return <MultiChoiceField {...props} label="¿Qué equipos utilizarás para preparar tus comidas?" hint="Opcional. Te ayuda a preparar la consulta de seguridad y ventilación con la municipalidad." options={kitchenEquipment} />;
+    case "smoke":
+      return <ChoiceField {...props} label="¿Al cocinar se generará bastante humo, vapor o grasa?" hint="Esta información nos ayuda a señalar qué condiciones de seguridad y ventilación debes revisar para tu establecimiento." options={choices} compact />;
+    case "constituted":
+      return <ChoiceField {...props} label="¿La constitución de la empresa ya está inscrita en SUNARP?" options={choices} compact />;
     case "partners":
       return <TextField {...props} label="¿Cuántos socios habrá, aparte de ti?" hint="Deja en blanco si aún no lo sabes." numeric whole maxLength={5} />;
     case "customers":
-      return <ChoiceField {...props} label="¿Quiénes serán tus clientes?" options={customers} />;
+      return <ChoiceField {...props} label="¿A quiénes venderás principalmente?" options={customers} />;
     case "rucStatus":
-      return <ChoiceField {...props} label="¿El negocio ya está inscrito en el RUC?" hint="Solo indica el estado de inscripción." options={choices} compact />;
+      return <ChoiceField {...props} label="¿Tu negocio ya cuenta con RUC?" hint="Solo indica el estado de inscripción." options={choices} compact />;
     case "workforce":
       return <ChoiceField {...props} label="¿Tienes o tendrás trabajadores dependientes?" options={choices} compact />;
     case "domicile":
@@ -386,7 +396,7 @@ function Question({ draft, ...props }: QuestionProps) {
     case "legal":
       return <ChoiceField {...props} label={isPlanning(draft.stage) ? "¿Cómo planeas operar?" : "¿Operas a tu nombre o como empresa?"} options={registration} />;
     case "invoice":
-      return <ChoiceField {...props} label="¿Emites o necesitas emitir facturas de venta?" hint="La factura permite al cliente sustentar un gasto o crédito fiscal cuando cumple los requisitos." options={choices} compact />;
+      return <ChoiceField {...props} label="¿Necesitarás emitir facturas a tus clientes?" hint="Por ejemplo, si venderás almuerzos a empresas que necesitan una factura para sustentar sus gastos." options={choices} compact />;
     case "foreignBranch":
       return <ChoiceField {...props} label="¿Tu negocio es una sucursal, agencia o local de una empresa constituida fuera del Perú?" options={choices} compact />;
     case "linkage":
@@ -401,7 +411,7 @@ function Question({ draft, ...props }: QuestionProps) {
 
 function Review({ draft, visible, edit }: { draft: AssessmentDraft; visible: AssessmentField[]; edit: (field: AssessmentField) => void }) {
   const options = { activity: activities, legal: registration, regime: regimes, invoice: choices, linkage: choices, foreignBranch: choices,
-    stage: stages, salesOrigin: origins, purchasesOrigin: origins, mode: modes, customers, risk: risks,
+    establishment: establishments, onlineOrders: choices, smoke: choices, constituted: choices, stage: stages, salesOrigin: origins, purchasesOrigin: origins, mode: modes, customers, risk: risks,
     fixedPlace: choices, rucStatus: choices, workforce: choices, domicile: choices, priorRmt: choices, license: choices, itse: choices, nrusRestriction: choices, rerRestriction: choices };
   function value(field: AssessmentField) {
     if (field === "activity" && draft.stage) {
@@ -409,9 +419,12 @@ function Review({ draft, visible, edit }: { draft: AssessmentDraft; visible: Ass
       const secondary = draft.secondary.split(",").filter(isCiiuCode);
       return draft.activity + " · " + ciiuCatalog[draft.activity].name + (secondary.length ? " · Secundarias " + secondary.join(", ") : "");
     }
+    if (field === "channels" || field === "equipment") {
+      return selectionOptions(draft[field], field === "channels" ? digitalChannels : kitchenEquipment).map(([, label]) => label).join(", ");
+    }
     if (field in options) return options[field as keyof typeof options].find(([key]) => key === draft[field])?.[1];
     if (!draft[field]) return;
-    return ["workers", "locations", "partners", "description", "province", "district"].includes(field) ? draft[field] : "S/ " + draft[field];
+    return ["workers", "locations", "partners", "description"].includes(field) ? draft[field] : "S/ " + draft[field];
   }
 
   return <div className="grid gap-5">

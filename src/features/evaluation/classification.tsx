@@ -8,14 +8,18 @@ import { ChoiceField } from "./assessment-fields";
 
 const endpoint = process.env.NEXT_PUBLIC_CREA_ASSISTANT_URL;
 
-export function ClassificationField({ description, evidence, primary, secondary, error, onPrimary, onEvidence, onSecondary }: {
-  description: string; evidence: string; primary: string; secondary: string; error?: string;
+export function ClassificationField({ description, mode, evidence, primary, secondary, error, onPrimary, onEvidence, onSecondary }: {
+  description: string; mode: string; evidence: string; primary: string; secondary: string; error?: string;
   onPrimary: (value: string) => void; onEvidence: (value: string) => void; onSecondary: (value: string) => void;
 }) {
   const [assisted, setAssisted] = useState<{ description: string; clues: CiiuClue[] }>();
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
-  const suggestions = suggestedCodes(description, assisted?.description === description ? assisted.clues : []);
+  const modeClue: CiiuClue | undefined = mode === "eventos" ? "events" : mode === "delivery" || mode === "recojo" ? "meals" : undefined;
+  const suggestions = suggestedCodes(description, [
+    ...(assisted?.description === description ? assisted.clues : []),
+    ...(modeClue ? [modeClue] : []),
+  ]);
   const order = [...suggestions, ...ciiuCodes.filter((code) => !suggestions.includes(code))];
 
   async function suggest() {
@@ -45,7 +49,7 @@ export function ClassificationField({ description, evidence, primary, secondary,
   return <section id="activity" tabIndex={-1} className="grid gap-4 rounded-xl border border-border p-4">
     <h3 className="font-bold">Clasifica tu actividad con el catálogo CIIU</h3>
     {suggestions.length > 0 && <details className="rule-details">
-      <summary>Clases candidatas según la descripción</summary>
+      <summary>Clases candidatas según tu actividad</summary>
       <ul className="grid gap-2 pb-2 text-sm">{suggestions.map((code) => <li key={code}><strong>{code} · {ciiuCatalog[code].name}</strong><br />{ciiuCatalog[code].reason}</li>)}</ul>
     </details>}
     {endpoint && <div className="text-sm">

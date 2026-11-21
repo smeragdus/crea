@@ -3,6 +3,27 @@ import type { BusinessContext, FinancialOrigin, TaxRecommendation } from "@/lib/
 import { ciiuCodes, confirmedClassification, isCiiuCode } from "@/lib/ciiu-catalog";
 import { NRUS_ANNUAL_LIMIT, NRUS_MONTHLY_LIMIT_CAT2, RER_ANNUAL_INCOME_LIMIT, RER_ANNUAL_PURCHASES_LIMIT, RER_ASSETS_LIMIT, RMT_INCOME_LIMIT_2026 } from "@/lib/tax-constants";
 
+export const cajamarcaLocation = { department: "Cajamarca", province: "Cajamarca", district: "Cajamarca" } as const;
+export const establishments = [
+  ["restaurante", "Restaurante", ""], ["cafeteria", "Cafetería", ""], ["polleria", "Pollería", ""],
+  ["cevicheria", "Cevichería", ""], ["pizzeria", "Pizzería", ""], ["menu", "Restaurante de menú o comida casera", ""],
+  ["rapida", "Comida rápida", ""], ["delivery", "Cocina exclusiva para delivery", ""],
+  ["movil", "Food truck o puesto móvil", ""], ["otro", "Otro establecimiento gastronómico similar", ""],
+] as const;
+export const digitalChannels = [
+  ["whatsapp", "WhatsApp"], ["redes", "Facebook, Instagram u otras redes sociales"],
+  ["apps", "Aplicaciones de delivery"], ["web", "Página web propia"], ["otro", "Otro"], ["unknown", "Todavía no lo sé"],
+] as const;
+export const kitchenEquipment = [
+  ["gas", "Cocina a gas"], ["electric", "Cocina eléctrica o de inducción"],
+  ["oven", "Hornos, parrillas o freidoras"], ["solid", "Equipos que utilizan carbón o leña"], ["unknown", "Todavía no lo sé"],
+] as const;
+
+export function selectionOptions(value: string, options: readonly (readonly [string, string])[]) {
+  const selected = value.split(",");
+  return options.filter(([key]) => selected.includes(key));
+}
+
 export const registration = [
   ["natural", "A mi nombre", "Persona natural con negocio"],
   ["juridica", "Como empresa", "Persona jurídica"],
@@ -21,15 +42,16 @@ export const origins = [
   ["desconocido", "Todavía no tengo cifras", ""],
 ] as const;
 export const modes = [
-  ["local", "Atención en un local", "Incluye negocios que también ofrecen delivery."],
-  ["delivery", "Cocina sin atención al público", "Solo recojo o reparto."],
-  ["eventos", "Eventos o comedores por contrato", ""],
+  ["local", "Atención en el establecimiento", "También puedes ofrecer recojo o delivery."],
+  ["recojo", "Para llevar", ""],
+  ["delivery", "Delivery", "Entrega a domicilio."],
+  ["eventos", "Preparación de comidas para eventos o por contrato", ""],
   ["movil", "Puesto móvil o itinerante", ""],
   ["desconocido", "Todavía no lo sé", ""],
 ] as const;
 export const customers = [
   ["personas", "Personas", ""], ["empresas", "Empresas o instituciones", ""],
-  ["ambos", "Ambos", ""], ["aun-no-se", "Todavía no lo sé", ""],
+  ["ambos", "Personas y empresas", ""], ["aun-no-se", "Todavía no lo sé", ""],
 ] as const;
 export const risks = [
   ["bajo-medio", "Bajo o medio", ""], ["alto", "Alto o muy alto", ""],
@@ -51,7 +73,7 @@ export const regimes = [
   ["DESCONOCIDO", "No lo sé"],
 ] as const;
 
-export const choices = [["yes", "Sí", ""], ["no", "No", ""], ["unknown", "No lo sé", ""]] as const;
+export const choices = [["yes", "Sí", ""], ["no", "No", ""], ["unknown", "Todavía no lo sé", ""]] as const;
 
 const amountText = z.string().refine((value) => value === "" || (
   /^\d+(?:[.,]\d{1,2})?$/.test(value) && Number(value.replace(",", ".")) <= 999999999999
@@ -59,6 +81,12 @@ const amountText = z.string().refine((value) => value === "" || (
 const countText = z.string().refine((value) => value === "" || /^\d{1,5}$/.test(value), "Ingresa un número entero entre 0 y 99 999.");
 const yesNo = z.enum(["yes", "no", "unknown", ""]);
 const draftSchema = z.object({
+  establishment: z.enum(["", ...establishments.map(([key]) => key)]),
+  onlineOrders: yesNo,
+  channels: z.string().max(60),
+  equipment: z.string().max(60),
+  smoke: yesNo,
+  constituted: yesNo,
   name: z.string().trim().max(100),
   stage: z.enum(["idea", "preparacion", "operando", "formalizado", ""]),
   description: z.string().trim().max(500),
@@ -72,10 +100,8 @@ const draftSchema = z.object({
   workforce: yesNo,
   domicile: yesNo,
   priorRmt: yesNo,
-  province: z.string().max(70),
-  district: z.string().max(70),
   partners: countText,
-  mode: z.enum(["local", "delivery", "eventos", "movil", "desconocido", ""]),
+  mode: z.enum(["local", "recojo", "delivery", "eventos", "movil", "desconocido", ""]),
   fixedPlace: yesNo,
   customers: z.enum(["personas", "empresas", "ambos", "aun-no-se", ""]),
   rucStatus: yesNo,
@@ -101,14 +127,25 @@ const draftSchema = z.object({
 export type AssessmentDraft = z.infer<typeof draftSchema>;
 
 export const emptyDraft: AssessmentDraft = {
+  establishment: "", onlineOrders: "", channels: "", equipment: "", smoke: "", constituted: "",
   name: "", activity: "", legal: "", regime: "", invoice: "",
   stage: "", description: "", activityEvidence: "", secondary: "",
-  salesOrigin: "", purchasesOrigin: "", grossAnnualSales: "", grossPurchases: "", workforce: "", domicile: "", priorRmt: "", province: "", district: "",
+  salesOrigin: "", purchasesOrigin: "", grossAnnualSales: "", grossPurchases: "", workforce: "", domicile: "", priorRmt: "",
   partners: "", mode: "", fixedPlace: "", customers: "", rucStatus: "",
   risk: "", license: "", itse: "", nrusRestriction: "", rerRestriction: "",
   annualSales: "", annualPurchases: "", maxMonthlySales: "", maxMonthlyPurchases: "",
   assets: "", workers: "", locations: "", linkage: "", foreignBranch: "",
 };
+
+export function restoreAssessmentDraft(saved?: Partial<AssessmentDraft>): AssessmentDraft {
+  const draft = { ...emptyDraft };
+  if (!saved) return draft;
+  for (const field of Object.keys(draft) as (keyof AssessmentDraft)[]) {
+    const value = saved[field];
+    if (typeof value === "string") Object.assign(draft, { [field]: value });
+  }
+  return draft;
+}
 
 export type AssessmentField = keyof AssessmentDraft;
 export const assessmentFieldLabels: Record<AssessmentField, string> = {
@@ -123,8 +160,12 @@ export const assessmentFieldLabels: Record<AssessmentField, string> = {
   workforce: "Personal dependiente",
   domicile: "Domicilio fiscal en Perú",
   priorRmt: "Ingresos del ejercicio anterior",
-  province: "Provincia",
-  district: "Distrito",
+  establishment: "Tipo de establecimiento",
+  onlineOrders: "Pedidos por medios digitales",
+  channels: "Medios para recibir pedidos",
+  equipment: "Equipos de cocina",
+  smoke: "Humo, vapor o grasa",
+  constituted: "Constitución inscrita en SUNARP",
   partners: "Cantidad de socios",
   mode: "Modalidad de atención",
   fixedPlace: "Establecimiento fijo",
@@ -152,16 +193,22 @@ export const assessmentFieldLabels: Record<AssessmentField, string> = {
 };
 const required = ["regime", "activity", "legal", "invoice"] as const;
 export const assessmentFields = [
-  ["stage", "description", "activity", "mode", "fixedPlace", "province", "district", "legal", "partners", "customers", "invoice", "rucStatus", "regime", "risk", "license", "itse", "workforce"],
+  ["establishment", "stage", "description", "mode", "activity", "fixedPlace", "legal", "partners", "constituted", "customers", "invoice", "onlineOrders", "channels", "rucStatus", "regime", "risk", "license", "itse", "equipment", "smoke", "workforce"],
   ["salesOrigin", "annualSales", "grossAnnualSales", "maxMonthlySales", "purchasesOrigin", "annualPurchases", "grossPurchases", "maxMonthlyPurchases"],
   ["locations", "assets", "workers", "nrusRestriction", "rerRestriction", "foreignBranch", "linkage", "domicile", "priorRmt"],
   ["name"],
 ] as const;
 
+export function declaredMode(draft: AssessmentDraft): AssessmentDraft["mode"] {
+  if (draft.establishment === "delivery" || draft.establishment === "movil") return draft.establishment;
+  return draft.mode;
+}
+
 export function relevantAssessmentFields(draft: AssessmentDraft): AssessmentField[] {
   const modern = Boolean(draft.stage);
   const planned = isPlanning(draft.stage);
-  const fixedPlace = draft.mode === "local" || draft.mode === "delivery" || draft.fixedPlace === "yes";
+  const mode = declaredMode(draft);
+  const fixedPlace = mode === "local" || draft.fixedPlace === "yes";
   const salesKnown = !modern || draft.salesOrigin === "real" || draft.salesOrigin === "proyectado";
   const purchasesKnown = !modern || draft.purchasesOrigin === "real" || draft.purchasesOrigin === "proyectado";
   const exceeds = (field: AssessmentField, limit: number) => (amount(draft[field]) ?? 0) > limit;
@@ -175,11 +222,15 @@ export function relevantAssessmentFields(draft: AssessmentDraft): AssessmentFiel
     && !(purchasesKnown && exceeds("annualPurchases", RER_ANNUAL_PURCHASES_LIMIT));
   const rmt = !(salesKnown && exceeds("annualSales", RMT_INCOME_LIMIT_2026));
   const conditional: Partial<Record<AssessmentField, boolean>> = {
+    establishment: modern || !draft.activity,
     description: modern,
-    mode: modern,
-    fixedPlace: modern && !["local", "delivery"].includes(draft.mode),
-    province: modern,
-    district: modern && Boolean(draft.province),
+    onlineOrders: modern,
+    channels: modern && draft.onlineOrders === "yes",
+    equipment: modern && fixedPlace && (draft.activity === "5610" || draft.activity === "5621" || draft.activity === "5629"),
+    smoke: modern && fixedPlace && selectionOptions(draft.equipment, kitchenEquipment).some(([key]) => key !== "unknown"),
+    constituted: modern && draft.stage !== "idea" && draft.legal === "juridica",
+    mode: modern && draft.establishment !== "delivery" && draft.establishment !== "movil",
+    fixedPlace: modern && mode !== "local",
     partners: modern && draft.legal !== "natural",
     customers: modern,
     invoice: modern || draft.legal !== "juridica",
@@ -227,10 +278,11 @@ export function validateAssessmentStep(draft: AssessmentDraft, step: number, vis
       if (visible.includes(field) && !draft[field]) issues[field] = "Selecciona una opción. Puedes indicar que no sabes.";
     }
     if (draft.stage) {
-      for (const field of ["mode", "fixedPlace", "customers", "rucStatus"] as const) {
+      for (const field of ["establishment", "mode", "fixedPlace", "customers", "rucStatus"] as const) {
         if (visible.includes(field) && !draft[field]) issues[field] = "Selecciona una opción. Puedes indicar que no sabes.";
       }
     }
+    if (draft.stage && !draft.description.trim()) issues.description = "Describe qué ofrecerás y cómo atenderás.";
     if (draft.stage && !confirmedClassification(draft.activity, draft.activityEvidence, draft.secondary) && draft.activity !== "unknown") {
       issues.activity = "Confirma el código o indica que la clasificación queda pendiente.";
     }
@@ -316,13 +368,21 @@ export function toBusinessContext(draft: AssessmentDraft, previous?: BusinessCon
   const financialOrigin = (value: string): FinancialOrigin =>
     value === "proyectado" || (value === "real" && !isPlanning(draft.stage)) ? value : "desconocido";
   const partnerCount = amount(included("partners"));
+  const mode = declaredMode(draft);
   return {
     ...previous,
+    ...cajamarcaLocation,
     assessmentVersion: modern ? 3 : 2,
+    establishment: draft.establishment || undefined,
+    digitalOrders: boolean(included("onlineOrders")),
+    orderChannels: selectionOptions(included("channels"), digitalChannels).map(([key]) => key),
+    kitchenEquipment: selectionOptions(included("equipment"), kitchenEquipment).map(([key]) => key),
+    kitchenSmoke: boolean(included("smoke")),
+    constitutionRegistered: boolean(included("constituted")),
     stage: draft.stage || undefined,
     financialOrigins: modern ? { sales: financialOrigin(draft.salesOrigin), purchases: financialOrigin(draft.purchasesOrigin) } : undefined,
     ciiuClassification: classification,
-    operationMode: draft.mode || undefined,
+    operationMode: mode || undefined,
     grossAnnualRevenue: amount(included("grossAnnualSales")),
     grossAnnualPurchases: amount(included("grossPurchases")),
     domiciledInPeru: boolean(included("domicile")),
@@ -339,21 +399,18 @@ export function toBusinessContext(draft: AssessmentDraft, previous?: BusinessCon
     activityId: activity,
     ciiu: modern ? classification?.primary : activity === "restaurante" ? "5610" : activity === "catering" ? "5621" : undefined,
     otherActivity: modern ? draft.description.trim() : "",
-    department: "Cajamarca",
-    province: modern ? draft.province : previous?.province ?? "",
-    district: modern ? included("district").trim() : previous?.district ?? "",
     legalPerson: draft.legal || "aun-no-se",
     personType: draft.legal === "natural" ? "PERSONA_NATURAL" : draft.legal === "juridica" ? "PERSONA_JURIDICA" : undefined,
     hasPartners: modern ? (partnerCount ?? 0) > 0 : previous?.hasPartners ?? false,
     partnerCount: modern ? partnerCount ?? 0 : previous?.partnerCount ?? 0,
-    hasPhysicalLocation: modern ? draft.mode === "local" || draft.mode === "delivery" || included("fixedPlace") === "yes" : locations !== undefined,
-    hasLocal: modern ? draft.mode === "local" || draft.mode === "delivery" ? true : boolean(included("fixedPlace")) : previous?.hasLocal,
-    servesPublic: modern ? draft.mode === "local" || draft.mode === "movil" : previous?.servesPublic ?? true,
+    hasPhysicalLocation: modern ? mode === "local" || included("fixedPlace") === "yes" : locations !== undefined,
+    hasLocal: modern ? mode === "local" ? true : boolean(included("fixedPlace")) : previous?.hasLocal,
+    servesPublic: modern ? mode === "local" || mode === "movil" : previous?.servesPublic ?? true,
     hasEmployees: modern ? boolean(included("workforce")) : workers === undefined ? undefined : workers > 0,
     employeeCount: workers ?? 0,
     employeeCountPerShift: workers,
     employees: workers,
-    sellsOnline: modern ? draft.mode === "delivery" : previous?.sellsOnline ?? false,
+    sellsOnline: modern ? boolean(included("onlineOrders")) ?? (mode === "delivery") : previous?.sellsOnline ?? false,
     preparesFood: modern ? Boolean(classification && classification.primary !== "5630") : true,
     importsGoods: previous?.importsGoods ?? false,
     exportsGoods: previous?.exportsGoods ?? false,
@@ -401,8 +458,12 @@ export function fromBusinessContext(context: BusinessContext): AssessmentDraft {
     domicile: choice(context.domiciledInPeru),
     priorRmt: choice(context.rmtPriorYearOverLimit),
     workforce: choice(context.hasEmployees),
-    province: context.province,
-    district: context.district,
+    establishment: context.establishment ?? "",
+    onlineOrders: context.digitalOrders === undefined ? "" : choice(context.digitalOrders),
+    channels: context.orderChannels?.join(",") ?? "",
+    equipment: context.kitchenEquipment?.join(",") ?? "",
+    smoke: context.kitchenSmoke === undefined ? "" : choice(context.kitchenSmoke),
+    constituted: context.constitutionRegistered === undefined ? "" : choice(context.constitutionRegistered),
     mode: context.operationMode ?? "",
     fixedPlace: choice(context.hasLocal),
     partners: context.hasPartners ? value(context.partnerCount) : "",

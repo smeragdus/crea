@@ -1,12 +1,26 @@
-export type SalesLine = { price: string; orders: string; days: string };
+export type SalesLine = { price: string; orders: string; days: string; monthlyOrders?: string };
 export type Season = { highMonths: string; highPercent: string; lowMonths: string; lowPercent: string };
 
+const decimal = /^\d{1,7}(?:[.,]\d{1,2})?$/;
+const whole = /^\d{1,6}$/;
+
+function subtotalCents({ price, orders, days, monthlyOrders }: SalesLine) {
+  if (!decimal.test(price)) return undefined;
+  const cents = Math.round(Number(price.replace(",", ".")) * 100);
+  if (monthlyOrders !== undefined) return whole.test(monthlyOrders) ? cents * Number(monthlyOrders) : undefined;
+  if (!whole.test(orders) || !whole.test(days) || Number(days) > 31) return undefined;
+  return cents * Number(orders) * Number(days);
+}
+
+export function monthlySalesSubtotal(line: SalesLine) {
+  const cents = subtotalCents(line);
+  return cents === undefined ? undefined : cents / 100;
+}
+
 export function projectSales(lines: SalesLine[], season: Season) {
-  const decimal = /^\d{1,7}(?:[.,]\d{1,2})?$/;
-  const whole = /^\d{1,6}$/;
-  if (!lines.length || lines.some(({ price, orders, days }) =>
-    !decimal.test(price) || !whole.test(orders) || !whole.test(days) || Number(days) > 31)) {
-    return { error: "Completa precio, pedidos y días de cada producto. Usa hasta 31 días de atención." } as const;
+  const subtotals = lines.map(subtotalCents);
+  if (!lines.length || subtotals.some((subtotal) => subtotal === undefined)) {
+    return { error: "Completa el precio y la cantidad de cada plato, bebida o servicio. Si calculas por día, usa hasta 31 días al mes." } as const;
   }
   const seasonValues = Object.values(season);
   if (seasonValues.some((value) => value !== "" && !whole.test(value))) {
@@ -20,8 +34,7 @@ export function projectSales(lines: SalesLine[], season: Season) {
     return { error: "Distribuye hasta 12 meses e indica la variación de cada temporada. La baja admite hasta 100 % y el aumento hasta 1 000 %." } as const;
   }
 
-  const regular = lines.reduce((sum, line) =>
-    sum + Math.round(Number(line.price.replace(",", ".")) * 100) * Number(line.orders) * Number(line.days), 0);
+  const regular = subtotals.reduce<number>((sum, subtotal) => sum + (subtotal ?? 0), 0);
   if (regular > 99_999_999_999_900) return { error: "La proyección supera el importe máximo admitido." } as const;
   const peak = Math.round(regular * (1 + increase / 100));
   const quiet = Math.round(regular * (1 - decrease / 100));
