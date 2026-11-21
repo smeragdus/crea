@@ -110,3 +110,43 @@ test("los casos ficticios se abren con simulador y formalización", async ({ pag
   await expect(page.getByRole("heading", { name: "Resultados del simulador" })).toBeVisible();
   await expect(page.getByText("Saldo estimado antes de impuestos")).toBeVisible();
 });
+
+
+test("conserva la sugerencia al recargar y solo cambia el diagnóstico al confirmar", async ({ page }) => {
+  await page.goto("/negocios/nuevo");
+  await choose(page, /Qué tipo de establecimiento/, "Pollería");
+  await advanceTo(page, "#stage");
+  await page.getByRole("radio", { name: /Solo tengo una idea de negocio/ }).check();
+  await advanceTo(page, "#mode");
+  await page.getByRole("radio", { name: /Atención en el establecimiento/ }).check();
+  await advanceTo(page, "#customers");
+  await choose(page, /A quiénes venderás principalmente/, "Personas");
+  await advanceTo(page, "#activity");
+  await page.getByLabel("Descripción de tu negocio").fill("Quiero vender pollo a la brasa en mi local y por delivery");
+  await page.getByRole("button", { name: "Identificar mi actividad con CREA IA" }).click();
+  await expect(page.getByText("Orientación local del INEI", { exact: true })).toBeVisible();
+  await expect(page.getByText("CIIU sugerido 5610")).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("CIIU sugerido 5610")).toBeVisible();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await expect(page.locator("#activity").getByRole("alert")).toContainText("Confirma el código");
+  await page.getByRole("button", { name: "Confirmar actividad" }).click();
+  await advanceTo(page, "#legal");
+  await page.getByRole("radio", { name: /A mi nombre/ }).check();
+  await advanceTo(page, "#invoice");
+  await choose(page, /Necesitarás emitir facturas/, "No");
+  await fillSalesOrigin(page, "Todavía no tengo cifras");
+  await fillPurchasesOrigin(page, "Todavía no tengo cifras");
+  await advanceTo(page, "#name");
+  await page.getByRole("button", { name: "Ver mi diagnóstico" }).click();
+  await expect(page.getByText(/5610.*Actividades de restaurantes/)).toBeVisible();
+  await page.getByRole("link", { name: "Cambiar actividad", exact: true }).click();
+  await page.getByRole("button", { name: "Corregir descripción" }).click();
+  await expect(page.getByLabel("Descripción de tu negocio")).toHaveValue("Quiero vender pollo a la brasa en mi local y por delivery");
+  await page.getByLabel("Descripción de tu negocio").fill("Prepararé y serviré comidas para matrimonios y cumpleaños");
+  await page.getByRole("button", { name: "Usar orientación local" }).click();
+  await expect(page.getByText("CIIU sugerido 5621")).toBeVisible();
+  await page.getByRole("button", { name: "Confirmar actividad" }).click();
+  await page.getByRole("button", { name: "Guardar cambio" }).click();
+  await expect(page.getByText(/5621.*Suministro de comidas por encargo/)).toBeVisible();
+});

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { BusinessContext, FinancialOrigin, TaxRecommendation } from "@/lib/types";
-import { ciiuCodes, confirmedClassification, isCiiuCode } from "@/lib/ciiu-catalog";
+import { ciiuCodes, confirmedClassification, isCiiuCode, readCiiuSnapshot } from "@/lib/ciiu-catalog";
 import { NRUS_ANNUAL_LIMIT, NRUS_MONTHLY_LIMIT_CAT2, RER_ANNUAL_INCOME_LIMIT, RER_ANNUAL_PURCHASES_LIMIT, RER_ASSETS_LIMIT, RMT_INCOME_LIMIT_2026 } from "@/lib/tax-constants";
 
 export const cajamarcaLocation = { department: "Cajamarca", province: "Cajamarca", district: "Cajamarca" } as const;
@@ -90,7 +90,8 @@ const draftSchema = z.object({
   name: z.string().trim().max(100),
   stage: z.enum(["idea", "preparacion", "operando", "formalizado", ""]),
   description: z.string().trim().max(500),
-  activity: z.enum([...ciiuCodes, "restaurante", "catering", "unknown", ""]),
+  activity: z.enum([...ciiuCodes, "restaurante", "catering", "unknown", "review", ""]),
+  activityAnalysis: z.string().max(700),
   activityEvidence: z.enum([...ciiuCodes, "unknown", ""]),
   secondary: z.string().max(40),
   salesOrigin: z.enum(["real", "proyectado", "desconocido", ""]),
@@ -128,7 +129,7 @@ export type AssessmentDraft = z.infer<typeof draftSchema>;
 
 export const emptyDraft: AssessmentDraft = {
   establishment: "", onlineOrders: "", channels: "", equipment: "", smoke: "", constituted: "",
-  name: "", activity: "", legal: "", regime: "", invoice: "",
+  name: "", activity: "", activityAnalysis: "", legal: "", regime: "", invoice: "",
   stage: "", description: "", activityEvidence: "", secondary: "",
   salesOrigin: "", purchasesOrigin: "", grossAnnualSales: "", grossPurchases: "", workforce: "", domicile: "", priorRmt: "",
   partners: "", mode: "", fixedPlace: "", customers: "", rucStatus: "",
@@ -151,6 +152,7 @@ export type AssessmentField = keyof AssessmentDraft;
 export const assessmentFieldLabels: Record<AssessmentField, string> = {
   stage: "Etapa del negocio",
   description: "Descripción del negocio",
+  activityAnalysis: "Sugerencia CIIU",
   activityEvidence: "Modalidad de la actividad",
   secondary: "Actividades secundarias",
   salesOrigin: "Origen de las ventas",
@@ -193,7 +195,7 @@ export const assessmentFieldLabels: Record<AssessmentField, string> = {
 };
 const required = ["regime", "activity", "legal", "invoice"] as const;
 export const assessmentFields = [
-  ["establishment", "stage", "description", "mode", "activity", "fixedPlace", "legal", "partners", "constituted", "customers", "invoice", "onlineOrders", "channels", "rucStatus", "regime", "risk", "license", "itse", "equipment", "smoke", "workforce"],
+  ["establishment", "stage", "description", "mode", "customers", "activity", "fixedPlace", "legal", "partners", "constituted", "invoice", "onlineOrders", "channels", "rucStatus", "regime", "risk", "license", "itse", "equipment", "smoke", "workforce"],
   ["salesOrigin", "annualSales", "grossAnnualSales", "maxMonthlySales", "purchasesOrigin", "annualPurchases", "grossPurchases", "maxMonthlyPurchases"],
   ["locations", "assets", "workers", "nrusRestriction", "rerRestriction", "foreignBranch", "linkage", "domicile", "priorRmt"],
   ["name"],
@@ -284,8 +286,7 @@ export function validateAssessmentStep(draft: AssessmentDraft, step: number, vis
     }
     if (!draft.establishment) issues.establishment = "Selecciona un tipo de establecimiento.";
     if (!draft.stage) issues.stage = "Selecciona la etapa de tu negocio.";
-    if (draft.stage && !draft.description.trim()) issues.description = "Describe qué ofrecerás y cómo atenderás.";
-    if (draft.stage && !confirmedClassification(draft.activity, draft.activityEvidence, draft.secondary) && draft.activity !== "unknown") {
+    if (draft.stage && !confirmedClassification(draft.activity, draft.activityEvidence, draft.secondary) && draft.activity !== "unknown" && draft.activity !== "review") {
       issues.activity = "Confirma el código o indica que la clasificación queda pendiente.";
     }
   }
@@ -384,6 +385,8 @@ export function toBusinessContext(draft: AssessmentDraft, previous?: BusinessCon
     stage: draft.stage || undefined,
     financialOrigins: modern ? { sales: financialOrigin(draft.salesOrigin), purchases: financialOrigin(draft.purchasesOrigin) } : undefined,
     ciiuClassification: classification,
+    ciiuStatus: classification ? "confirmada" : draft.activity === "review" ? "revision" : "pendiente",
+    ciiuSuggestionSource: classification ? readCiiuSnapshot(draft.activityAnalysis)?.source ?? previous?.ciiuSuggestionSource : undefined,
     operationMode: mode || undefined,
     grossAnnualRevenue: amount(included("grossAnnualSales")),
     grossAnnualPurchases: amount(included("grossPurchases")),
@@ -450,7 +453,7 @@ export function fromBusinessContext(context: BusinessContext): AssessmentDraft {
     name: context.businessName ?? "",
     stage: context.stage ?? "",
     description: context.otherActivity ?? "",
-    activity: context.stage ? isCiiuCode(code) ? code : "unknown" : activity,
+    activity: context.stage ? isCiiuCode(code) ? code : context.ciiuStatus === "revision" ? "review" : "unknown" : activity,
     activityEvidence: isCiiuCode(code) ? code : "unknown",
     secondary: context.ciiuClassification?.secondary.join(",") ?? "",
     salesOrigin: context.financialOrigins?.sales ?? "",

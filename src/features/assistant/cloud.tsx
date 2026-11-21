@@ -10,13 +10,17 @@ import { useSession } from "@/features/auth/session";
 import { assistantTopics, isAssistantTopic, localAssistantTopic, type AssistantTopic } from "@/lib/assistant-topics";
 import { ciiuCatalog, type CiiuCode } from "@/lib/ciiu-catalog";
 
-type Context = { stage: string; question: string; topics: AssistantTopic[]; stageAnswered: boolean; planning: boolean; code?: CiiuCode };
+type Context = { stage: string; question: string; topics: AssistantTopic[]; stageAnswered: boolean; planning: boolean; code?: CiiuCode; suggestionCode?: CiiuCode };
 
 function contextualHelp(context: Context | null, topic?: AssistantTopic) {
   if (topic === "sales" && context?.planning) return "Para tu etapa inicial, registra la estimación como proyección de todo el ejercicio.";
   if ((topic === "ciiu" || topic === "mixed") && context?.code) {
     const entry = ciiuCatalog[context.code];
     return context.code + " · " + entry.name + ". " + entry.reason;
+  }
+  if ((topic === "ciiu" || topic === "mixed") && context?.suggestionCode) {
+    const entry = ciiuCatalog[context.suggestionCode];
+    return "Sugerencia por confirmar · " + context.suggestionCode + ". " + entry.reason + " Si no coincide con lo que harás, usa «Corregir descripción».";
   }
   if ((topic === "ciiu" || topic === "mixed") && context?.stageAnswered) {
     return "Si aún no confirmaste el código, indica qué actividad predomina: comidas de consumo inmediato, bebidas, eventos puntuales o contratos continuos. Si falta esa información, deja la clasificación pendiente.";

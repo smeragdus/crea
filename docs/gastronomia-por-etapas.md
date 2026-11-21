@@ -41,7 +41,16 @@ Instala dependencias con `pnpm install --frozen-lockfile` y ejecuta `pnpm dev`. 
 
 La nube funciona con contenido local verificado. La ayuda del espacio de trabajo usa recuperación de fragmentos de SUNAT y datos del diagnóstico procesados en el navegador. La conversación de la nube permanece en memoria durante la navegación y permite borrarla. El módulo de investigación muestra la nube con la asistencia deshabilitada. No se adjuntó el protocolo aprobado para un contraste metodológico. Se conservaron la configuración de 36 participantes y 18 preguntas, el instrumento y las reglas de Firestore.
 
-Para probar el modelo opcional en Node.js 24, define `CREA_ASSISTANT_ORIGIN=http://localhost:3000`, `CREA_ASSISTANT_MODEL` y `OPENAI_API_KEY` para el servidor. Configura `NEXT_PUBLIC_CREA_ASSISTANT_URL=http://127.0.0.1:3200/api/crea-assistant` y ejecuta `pnpm assistant` en otra terminal. En un entorno alojado, publica el proceso por HTTPS mediante un proxy y configura presupuestos y límites del proveedor. El servidor solo acepta una pregunta o la descripción elegida por el usuario, filtra identificadores evidentes, limita tamaño y frecuencia, y descarta salidas fuera del catálogo de temas. El modelo propone identificadores, y la aplicación muestra el contenido y las fuentes que ya tiene asociados a ellos. La compilación estática y la ayuda local funcionan con el backend apagado.
+### Probar CREA IA para la clasificación CIIU
+
+1. Usa Node.js 24 y configura el backend con `CREA_ASSISTANT_ORIGIN` igual al origen exacto de la vista web, por ejemplo `http://127.0.0.1:3196`. Define `CREA_ASSISTANT_MODEL` con un modelo de OpenAI habilitado para Responses API y salidas estructuradas. Guarda `OPENAI_API_KEY` solo en el entorno del servidor.
+2. Configura `NEXT_PUBLIC_CREA_ASSISTANT_URL=http://127.0.0.1:3200/api/crea-assistant` y ejecuta `pnpm assistant` en otra terminal. Reinicia el servidor web si cambiaste la URL. En un entorno alojado, publica el backend existente por HTTPS y configura su origen exacto. La exportación estática de Next.js solo necesita la URL pública, sin claves.
+3. En el cuestionario, autoriza compartir el perfil y elige «Identificar mi actividad con CREA IA». Se envía la descripción escrita y las opciones de establecimiento, modalidad y clientes. Evita datos identificables. También puedes usar la orientación local sin compartir el perfil.
+
+El mismo adaptador sirve la nube y la clasificación. La clasificación solicita una propuesta estructurada con una clase principal, hasta dos secundarias, una aclaración opcional o un estado de revisión. El servidor valida códigos permitidos, combinaciones y extractos presentes en el texto. Los nombres, enlaces y explicaciones se obtienen del catálogo local. El modelo se solicita con `store: false`.
+
+CREA identifica si la sugerencia proviene del proveedor o del catálogo local. Si no hay proveedor, falla o alcanza el límite, el catálogo local guía la evaluación con hasta dos aclaraciones. Un código sugerido se incorpora a la actividad económica cuando el usuario lo confirma de forma expresa. Los instrumentos de investigación mantienen su flujo y restricciones de asistencia.
+
 
 ```powershell
 pnpm typecheck

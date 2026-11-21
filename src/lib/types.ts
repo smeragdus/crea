@@ -24,6 +24,8 @@ export type BusinessContext = {
   assessmentVersion?: 2 | 3;
   stage?: BusinessStage;
   financialOrigins?: { sales: FinancialOrigin; purchases: FinancialOrigin };
+  ciiuStatus?: "confirmada" | "pendiente" | "revision";
+  ciiuSuggestionSource?: "local" | "ia";
   ciiuClassification?: { version: string; primary: string; secondary: string[] };
   establishment?: "restaurante" | "cafeteria" | "polleria" | "cevicheria" | "pizzeria" | "menu" | "rapida" | "delivery" | "movil" | "otro";
   digitalOrders?: boolean;

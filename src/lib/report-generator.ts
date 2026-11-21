@@ -32,7 +32,7 @@ export function buildDiagnosticReportData(
   const formData: Array<[string, string, string]> = [
     ["RUC declarado", formatBoolean(context.hasRuc), "hasRuc"],
     ["Tipo de clientes", customerLabels[context.customerType] ?? "Sin indicar", "customerType"],
-    ["Actividad económica (CIIU)", context.ciiu ?? "Clasificación pendiente", "ciiu"],
+    ["Actividad económica (CIIU)", context.ciiu ?? (context.ciiuStatus === "revision" ? "Clasificación por revisar" : "Clasificación pendiente"), "ciiu"],
     ["Tipo de registro", context.legalPerson === "natural" ? "Persona natural con negocio" : context.legalPerson === "juridica" ? "Persona jurídica" : "Sin indicar", "personType"],
     ["Ventas anuales", formatAmount(context.annualRevenue), "annualRevenue"],
     ["Compras anuales", formatAmount(context.annualPurchases), "annualPurchases"],

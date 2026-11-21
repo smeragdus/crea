@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { emptyDraft, fromBusinessContext, relevantAssessmentFields, restoreAssessmentDraft, toBusinessContext, validateAssessmentStep, type AssessmentDraft } from "@/features/evaluation/assessment";
-import { CIIU_VERSION, confirmedClassification, suggestedCodes } from "./ciiu-catalog";
+import { answerCiiuClarification, CIIU_VERSION, confirmedClassification, readCiiuSnapshot, suggestCiiuLocally, verifyProviderCiiu, type CiiuInput } from "./ciiu-catalog";
 import { RuleEngine } from "./rule-engine";
 import { buildFormalizationRoute } from "./formalization";
 import { projectSales } from "./sales-projection";
@@ -102,12 +102,51 @@ describe("Evaluación gastronómica por etapas", () => {
 });
 
 describe("Clasificación verificable", () => {
+  const input = (description: string, context: Partial<CiiuInput> = {}): CiiuInput => ({
+    description, establishment: "", mode: "", customers: "", ...context,
+  });
+
   it.each([
-    ["Cafetería con jugos, bebidas y comidas", ["5630", "5610"]],
-    ["Restaurante con delivery", ["5610"]],
-    ["Catering contratado", ["5621", "5629"]],
-    ["Alimentos envasados y platos congelados", ["1075", "1079", "5610"]],
-  ])("sugiere candidatos para %s", (description, codes) => expect(suggestedCodes(description)).toEqual(expect.arrayContaining(codes)));
+    ["Quiero vender pollo a la brasa en mi local y por delivery", "5610", null],
+    ["Venderé café, postres y sándwiches para consumir en el local", null, "drinks"],
+    ["Prepararé y serviré comidas para matrimonios y cumpleaños", "5621", null],
+    ["Una empresa me contratará durante varios meses para proporcionar almuerzos a sus trabajadores", "5629", null],
+    ["Prepararé alimentos envasados para venderlos a otras tiendas", null, "product"],
+    ["Quiero vender comida", null, "offer"],
+    ["Elaboraré pizza congelada para vender a tiendas", "1075", null],
+    ["Sirvo principalmente bebidas que preparo para consumir en el local", "5630", null],
+  ])("clasifica o solicita la aclaración necesaria para %s", (description, primary, clarification) => {
+    expect(suggestCiiuLocally(input(description))).toMatchObject({ primary, clarification });
+  });
+
+  it("propone secundarias solo para líneas diferenciadas y conserva la selección en un borrador", () => {
+    const profile = input("Vendo café, desayunos y sándwiches para consumir en el local. También preparo tortas para otras tiendas", { establishment: "cafeteria" });
+    expect(suggestCiiuLocally(profile).clarification).toBe("mixed");
+    const suggestion = answerCiiuClarification(profile, "mixed", "meals");
+    expect(suggestion).toMatchObject({ primary: "5610", secondary: ["1071"] });
+    expect(readCiiuSnapshot(JSON.stringify({ source: "local", suggestion, questions: 1, selectedSecondary: ["1071"] })))
+      .toMatchObject({ questions: 1, selectedSecondary: ["1071"] });
+    expect(suggestCiiuLocally(input("Pollería con pollo a la brasa y bebidas para consumir en mi local", { establishment: "polleria" })).secondary).toEqual([]);
+  });
+
+  it("valida extractos, clases y conflictos sin cambiar la clasificación automáticamente", () => {
+    const profile = input("Quiero vender pollo a la brasa en mi local y por delivery", { establishment: "polleria" });
+    const response = { primary: { code: "5610", excerpt: "pollo a la brasa en mi local" }, secondary: [], clarification: null, review: false };
+    expect(verifyProviderCiiu(response, profile)).toMatchObject({ source:"ia", suggestion:{ primary:"5610" } });
+    expect(() => verifyProviderCiiu({ ...response, primary: { ...response.primary, code: "9999" } }, profile)).toThrow();
+    expect(() => verifyProviderCiiu({ ...response, primary: { ...response.primary, excerpt: "un comedor escolar" } }, profile)).toThrow();
+    expect(verifyProviderCiiu({ ...response, primary: { ...response.primary, code: "5629" } }, profile))
+      .toMatchObject({ source:"local", suggestion:{ primary:"5610" } });
+    const generic = input("Quiero abrir un negocio de comida para la gente de mi barrio", { mode:"local" });
+    expect(verifyProviderCiiu({ ...response, primary:{ code:"5610", excerpt:generic.description } }, generic))
+      .toMatchObject({ source:"local", suggestion:{ primary:null, clarification:"offer" } });
+    const nuanced = input("Cocinaré y serviré de inmediato a los comensales.");
+    expect(verifyProviderCiiu({ ...response, primary:{ code:"5610", excerpt:nuanced.description } }, nuanced))
+      .toMatchObject({ source:"ia", suggestion:{ primary:"5610" } });
+    const draft = { ...base, activity:"", activityEvidence:"", activityAnalysis:JSON.stringify({ source:"ia", suggestion:suggestCiiuLocally(profile), questions:0 }) } as AssessmentDraft;
+    expect(toBusinessContext(draft).ciiu).toBeUndefined();
+    expect(toBusinessContext({ ...draft, activity:"review" }).ciiuStatus).toBe("revision");
+  });
 
   it("confirma usando modalidad declarada y conserva actividades secundarias", () => {
     expect(confirmedClassification("5610", "5630", "5621")).toBeUndefined();

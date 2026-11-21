@@ -30,22 +30,23 @@ export async function fillProfile(page: Page, stage = "Mi negocio ya está forma
   await choose(page, /Qué tipo de establecimiento/, options.establishment ?? "Restaurante");
   await advanceTo(page, "#stage");
   await page.getByRole("radio", { name: stage, exact: false }).check();
-  await advanceTo(page, "#description");
-  await page.locator("#description").fill(options.description ?? "Restaurante de menú con delivery");
   await advanceTo(page, "#mode");
   await page.getByRole("radio", { name: /Atención en el establecimiento/ }).check();
+  await advanceTo(page, "#customers");
+  await choose(page, /A quiénes venderás principalmente/, options.ambiguous ? "Personas y empresas" : "Personas");
   await advanceTo(page, "#activity");
+  await page.locator("#description").fill(options.description ?? "Restaurante de menú con delivery");
+  await page.getByRole("button", { name: "Usar orientación local" }).click();
   if (options.ambiguous) {
-    await page.getByRole("radio", { name: "Aún no puedo identificarla o mi actividad no figura" }).check();
+    await page.getByRole("button", { name: "Todavía no lo sé", exact: true }).click();
     await expect(page.getByText("Clasificación pendiente", { exact: true })).toBeVisible();
   } else {
-    await page.getByRole("radio", { name: "Sirvo comidas listas para consumir", exact: true }).check();
-    await page.getByRole("checkbox", { name: "Confirmo este código como actividad principal" }).check();
+    await expect(page.getByText("CIIU sugerido 5610")).toBeVisible();
+    await page.getByRole("button", { name: "Confirmar actividad" }).click();
+    await expect(page.getByText("Actividad confirmada", { exact: true })).toBeVisible();
   }
   await advanceTo(page, "#legal");
   await page.getByRole("radio", { name: options.legal === "juridica" ? /Como empresa/ : /A mi nombre/ }).check();
-  await advanceTo(page, "#customers");
-  await choose(page, /A quiénes venderás principalmente/, options.ambiguous ? "Personas y empresas" : "Personas");
   await advanceTo(page, "#invoice");
   await choose(page, /Necesitarás emitir facturas/, options.invoice ?? "No");
   if (options.online) {

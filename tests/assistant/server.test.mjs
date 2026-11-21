@@ -7,21 +7,29 @@ const providerReply = (data) => Response.json({ output: [{
   type: "message", content: [{ type: "output_text", text: JSON.stringify(data) }],
 }] });
 
-test("selecciona solo claves permitidas y deshabilita el almacenamiento del proveedor", async () => {
-  const result = await classify({ kind: "description", message: "Comidas congeladas para reventa" }, {
+const profile = { description: "Prepararé pollo a la brasa para servir en mi local y por delivery", establishment: "polleria", mode: "local", customers: "personas" };
+const successfulClassification = {
+  primary: { code: "5610", excerpt: "pollo a la brasa para servir en mi local" }, secondary: [], clarification: null, review: false,
+};
+
+test("envía el perfil al proveedor con esquema estricto y valida el catálogo y el extracto", async () => {
+  const result = await classify({ kind: "classification", profile }, {
     key: "test-key", model: "test-model",
-    fetcher: async (_url, request) => {
+    fetcher: async (url, request) => {
+      assert.equal(url, "https://api.openai.com/v1/responses");
       const body = JSON.parse(request.body);
       assert.equal(body.store, false);
       assert.equal(body.text.format.strict, true);
-      assert.equal(body.input, "Comidas congeladas para reventa");
-      return providerReply({ clues: ["production", "production"] });
+      assert.equal(body.text.format.name, "crea_ciiu");
+      assert.deepEqual(JSON.parse(body.input), profile);
+      assert.match(body.instructions, /5629/);
+      return providerReply(successfulClassification);
     },
   });
-  assert.deepEqual(result, { clues: ["production"] });
-  await assert.rejects(classify({ kind: "description", message: "Texto no confiable" }, {
-    key: "test-key", model: "test-model", fetcher: async () => providerReply({ clues: ["9999"] }),
-  }), /Invalid provider selection/);
+  assert.deepEqual(result, { source: "ia", suggestion:{ primary:"5610", secondary:[], clarification:null, review:false } });
+  await assert.rejects(classify({ kind: "classification", profile }, {
+    key: "test-key", model: "test-model", fetcher: async () => providerReply({ ...successfulClassification, primary:{ code:"9999", excerpt:profile.description } }),
+  }));
 });
 
 async function withServer(options, run) {
@@ -60,5 +68,24 @@ test("devuelve indisponibilidad para que el sitio mantenga la ayuda local", asyn
       body: JSON.stringify({ question: "Cómo se clasifican las cafeterías" }) });
     assert.equal(response.status, 503);
     assert.equal(response.headers.get("cache-control"), "no-store");
+  });
+});
+
+
+test("el mismo servidor gestiona clasificación, perfiles inválidos y errores del modelo", async () => {
+  const origin = "https://crea.example";
+  let forwarded = 0;
+  await withServer({ origin, key:"test-key", model:"test-model", fetcher: async () => {
+    forwarded++;
+    return forwarded === 1 ? providerReply(successfulClassification) : providerReply({ primary: "no estructurado" });
+  } }, async (url) => {
+    const send = (classification) => fetch(url, { method:"POST", headers:{ Origin:origin, "Content-Type":"application/json" }, body:JSON.stringify({ classification }) });
+    assert.equal((await send({ ...profile, email:"persona@example.test" })).status, 400);
+    assert.equal((await send({ ...profile, description:"Mi nombre es Una Persona" })).status, 400);
+    const response = await send(profile);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).suggestion.primary, "5610");
+    assert.equal((await send(profile)).status, 502);
+    assert.equal(forwarded, 2);
   });
 });

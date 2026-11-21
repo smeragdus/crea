@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { SourceLink } from "@/components/ui/primitives";
 import { useAssistantContext } from "@/features/assistant/cloud";
 import { localAssistantTopic } from "@/lib/assistant-topics";
-import { ciiuCatalog, isCiiuCode } from "@/lib/ciiu-catalog";
+import { ciiuCatalog, isCiiuCode, readCiiuSnapshot, type CiiuCode } from "@/lib/ciiu-catalog";
 import styles from "./wizard.module.css";
 import { ClassificationField } from "./classification";
 import { ProjectionCalculator } from "@/features/workspace/projection-calculator";
@@ -73,7 +73,7 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
     const restoredStep = assessmentFields[restored.step];
     return restoredStep?.some((field) => visible.includes(field)) ? restored.step : reviewStep;
   });
-  const [cursor, setCursor] = useState<AssessmentField | undefined>(() => restored?.question);
+  const [cursor, setCursor] = useState<AssessmentField | undefined>(() => restored?.question === "description" ? "activity" : restored?.question);
   const [edit, setEdit] = useState<Edit | null>(() => requestedField && relevantAssessmentFields(draft).includes(requestedField)
     ? { fields: [requestedField], original: draft, returnToDiagnosis: true } : null);
   const [errors, setErrors] = useState<Errors>({});
@@ -87,7 +87,7 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
   // Keep each financial bundle together so projections and amounts can be checked side by side.
   const groupsFor = (index: number): AssessmentField[][] => {
     const fields = assessmentFields[index].filter((field) => visible.includes(field));
-    if (index !== 1 || !draft.stage) return fields.map((field) => [field]);
+    if (index !== 1 || !draft.stage) return fields.filter((field) => field !== "description").map((field) => [field]);
     return [
       fields.filter((field) => field === "salesOrigin" || ["annualSales", "grossAnnualSales", "maxMonthlySales"].includes(field)),
       fields.filter((field) => field === "purchasesOrigin" || ["annualPurchases", "grossPurchases", "maxMonthlyPurchases"].includes(field)),
@@ -101,6 +101,7 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
   const focusTopic = localAssistantTopic(focusedQuestion);
   const stageAnswered = Boolean(draft.stage);
   const planning = isPlanning(draft.stage);
+  const suggestionCode = readCiiuSnapshot(draft.activityAnalysis)?.suggestion.primary ?? undefined;
   const assistantContext = useMemo(() => ({
     stage: steps[step].label,
     question: focusedQuestion || (helpField ? assessmentFieldLabels[helpField] : steps[step].description),
@@ -110,7 +111,8 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
     stageAnswered,
     planning,
     code: isCiiuCode(draft.activity) ? draft.activity : undefined,
-  }), [draft.activity, focusedQuestion, focusTopic, helpField, planning, stageAnswered, step]);
+    suggestionCode,
+  }), [draft.activity, focusedQuestion, focusTopic, helpField, planning, stageAnswered, step, suggestionCode]);
   useAssistantContext(assistantContext);
 
   useEffect(() => {
@@ -134,9 +136,11 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
         if (next.salesOrigin === "real") next.salesOrigin = "";
         if (next.purchasesOrigin === "real") next.purchasesOrigin = "";
       }
-      if ((key === "description" && current.description !== value || declaredMode(current) !== declaredMode(next)) && isCiiuCode(current.activity)) {
+      if (((key === "description" || key === "establishment") && current[key] !== value) || declaredMode(current) !== declaredMode(next)) {
         next.activity = "";
         next.activityEvidence = "";
+        next.secondary = "";
+        next.activityAnalysis = "";
       }
       return next;
     });
@@ -229,7 +233,7 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
       const issues = validateAssessmentStep(draft, index, visible);
       const field = Object.keys(issues)[0] as AssessmentField | undefined;
       if (field) {
-        goTo(index, field);
+        goTo(index, field === "description" ? "activity" : field);
         setErrors(issues);
         focusField(field);
         return;
@@ -240,10 +244,15 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
 
   const currentFields = edit ? edit.fields.filter((field, index) => index === 0 || visible.includes(field))
     : currentGroup;
+  function decideActivity(primary: CiiuCode | "unknown" | "review" | "", secondary: CiiuCode[] = []) {
+    setDraft((current) => ({ ...current, activity: primary, activityEvidence: isCiiuCode(primary) ? primary : "", secondary: secondary.join(",") }));
+    setErrors((current) => ({ ...current, activity: undefined }));
+  }
+
   const field = (id: AssessmentField) => id === "activity" && draft.stage ?
-    <ClassificationField key={id} description={draft.description} mode={declaredMode(draft)} evidence={draft.activityEvidence} primary={draft.activity}
-      secondary={draft.secondary} error={errors.activity} onPrimary={(value) => update("activity", value)}
-      onEvidence={(value) => update("activityEvidence", value)} onSecondary={(value) => update("secondary", value)} /> :
+    <ClassificationField key={id} profile={{ description: draft.description, mode: declaredMode(draft), establishment: draft.establishment, customers: draft.customers }}
+      primary={draft.activity} secondary={draft.secondary} analysis={draft.activityAnalysis} error={errors.activity ?? errors.description}
+      onDescription={(value) => update("description", value)} onAnalysis={(value) => update("activityAnalysis", value)} onDecision={decideActivity} /> :
     <Question key={id} id={id} draft={draft} value={draft[id]} error={errors[id]} onChange={(value) => update(id, value)} />;
 
   return <div className={styles.background}>
@@ -388,6 +397,7 @@ function Question({ draft, ...props }: QuestionProps) {
           : "https://orientacion.sunat.gob.pe/2937-empresas-no-comprendidas-en-el-regimen-especial"}>Consultar exclusiones de SUNAT</SourceLink>
       </div>;
     }
+    case "activityAnalysis":
     case "activityEvidence":
     case "secondary":
       return null;
@@ -422,7 +432,7 @@ function Review({ draft, visible, edit }: { draft: AssessmentDraft; visible: Ass
     fixedPlace: choices, rucStatus: choices, workforce: choices, domicile: choices, priorRmt: choices, license: choices, itse: choices, nrusRestriction: choices, rerRestriction: choices };
   function value(field: AssessmentField) {
     if (field === "activity" && draft.stage) {
-      if (!isCiiuCode(draft.activity)) return "Clasificación pendiente";
+      if (!isCiiuCode(draft.activity)) return draft.activity === "review" ? "Clasificación por revisar" : "Clasificación pendiente";
       const secondary = draft.secondary.split(",").filter(isCiiuCode);
       return draft.activity + " · " + ciiuCatalog[draft.activity].name + (secondary.length ? " · Secundarias " + secondary.join(", ") : "");
     }

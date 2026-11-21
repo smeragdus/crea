@@ -107,9 +107,17 @@ export function Results({ evaluation, context, workspaceHref, prepareEdit }: {
       <h2 className="text-lg font-bold">Actividad y origen de tus cifras</h2>
       {isCiiuCode(context.ciiu) ? <>
         <p><strong>{context.ciiu}</strong> · {ciiuCatalog[context.ciiu].name}</p>
+        {context.ciiuSuggestionSource && <p className="text-sm text-muted-foreground">
+          {context.ciiuSuggestionSource === "ia" ? "Sugerencia de CREA IA confirmada por ti." : "Orientación local del INEI confirmada por ti."}
+        </p>}
         {(context.ciiuClassification?.secondary.length ?? 0) > 0 && <p className="text-sm">Actividades secundarias · {context.ciiuClassification?.secondary.join(", ")}</p>}
         <SourceLink href={CIIU_TABLE}>{context.ciiuClassification?.version ?? "Tabla CIIU Rev. 4"}</SourceLink>
-      </> : <p>Clasificación pendiente. Puedes volver a indicar qué actividad aporta más a tu negocio.</p>}
+      </> : <p>{context.ciiuStatus === "revision"
+        ? "Clasificación por revisar. Verifica la actividad principal con SUNAT."
+        : "Clasificación pendiente. Puedes volver a describir tu actividad."}</p>}
+      {prepareEdit && <Link className="hero-secondary" href={assessmentEditHref("activity")} onClick={prepareEdit}>
+        {isCiiuCode(context.ciiu) ? "Cambiar actividad" : "Revisar mi actividad"}
+      </Link>}
       {context.financialOrigins && <dl className="grid gap-2 text-sm sm:grid-cols-2">
         <div><dt>Ventas</dt><dd className="font-bold">{originLabels[context.financialOrigins.sales]}</dd></div>
         <div><dt>Compras</dt><dd className="font-bold">{originLabels[context.financialOrigins.purchases]}</dd></div>
