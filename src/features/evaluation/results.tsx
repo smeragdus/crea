@@ -2,6 +2,7 @@ import { ArrowRight, CheckCircle2, CircleAlert, CircleHelp } from "lucide-react"
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { LinkButton, SourceLink } from "@/components/ui/primitives";
+import { soles } from "@/lib/utils";
 import { sourceById } from "@/lib/seed-catalog";
 import { ciiuCatalog, CIIU_TABLE, isCiiuCode } from "@/lib/ciiu-catalog";
 import type { FullWorkspaceEvaluation } from "@/lib/rule-engine";
@@ -38,6 +39,7 @@ function RuleDetails({ regime }: { regime: TaxRecommendation }) {
 function RegimeReasons({ regime }: { regime: TaxRecommendation }) {
   const reasons = [...regime.breachedConditions, ...regime.missingDataFields];
   return <>
+    {regime.status === "INFORMACION_INSUFICIENTE" && <p className="text-sm">Este régimen podría corresponderte, pero necesitamos verificar algunos datos.</p>}
     {regime.verification !== "VIGENTE" && <p className="text-sm text-muted-foreground">La fuente requiere una revisión de vigencia.</p>}
     {reasons.length > 0 && <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">{reasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul>}
   </>;
@@ -71,7 +73,7 @@ export function Results({ evaluation, context, workspaceHref, prepareEdit }: {
   const gap = declared && prepareEdit ? nextAssessmentGap(declared, context) : undefined;
 
   const starting = context.stage === "idea" || context.stage === "preparacion";
-  const originLabels = { real: "Reales declaradas", proyectado: "Proyectadas", desconocido: "Desconocidas" } as const;
+  const originLabels = { real: "Reales declaradas", proyectado: "Proyectadas", declarado: "Montos declarados", desconocido: "Desconocidas" } as const;
   let summary = starting ? "Revisa las opciones para tu escenario y completa los datos cuando los conozcas."
     : current?.declaredRegime === "SIN_REGIMEN"
     ? "Indicaste que tu restaurante todavía no tiene un régimen. Revisa qué condiciones cumple según los datos que ingresaste."
@@ -119,8 +121,8 @@ export function Results({ evaluation, context, workspaceHref, prepareEdit }: {
         {isCiiuCode(context.ciiu) ? "Cambiar actividad" : "Revisar mi actividad"}
       </Link>}
       {context.financialOrigins && <dl className="grid gap-2 text-sm sm:grid-cols-2">
-        <div><dt>Ventas</dt><dd className="font-bold">{originLabels[context.financialOrigins.sales]}</dd></div>
-        <div><dt>Compras</dt><dd className="font-bold">{originLabels[context.financialOrigins.purchases]}</dd></div>
+        <div><dt>Ventas</dt><dd className="font-bold">{originLabels[context.financialOrigins.sales]}</dd>{context.typicalMonthlyRevenue !== undefined && <dd>Estimación mensual · {soles(context.typicalMonthlyRevenue)}</dd>}</div>
+        <div><dt>Compras</dt><dd className="font-bold">{originLabels[context.financialOrigins.purchases]}</dd>{context.typicalMonthlyPurchases !== undefined && <dd>Estimación mensual · {soles(context.typicalMonthlyPurchases)}</dd>}</div>
       </dl>}
     </Card>}
     {declared && <section id="condiciones" tabIndex={-1} className="flow-anchor grid gap-3">

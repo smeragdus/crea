@@ -21,19 +21,14 @@ type ProfileOptions = {
   legal?: "natural" | "juridica";
   invoice?: string;
   ambiguous?: boolean;
-  online?: boolean;
-  kitchen?: boolean;
+  stopAtSales?: boolean;
 };
 
 export async function fillProfile(page: Page, stage = "Mi negocio ya está formalizado", regime = "NRUS", options: ProfileOptions = {}) {
-  await expect(page.locator("#establishment")).toBeVisible();
-  await choose(page, /Qué tipo de establecimiento/, options.establishment ?? "Restaurante");
   await advanceTo(page, "#stage");
   await page.getByRole("radio", { name: stage, exact: false }).check();
-  await advanceTo(page, "#mode");
-  await page.getByRole("radio", { name: /Atención en el establecimiento/ }).check();
-  await advanceTo(page, "#customers");
-  await choose(page, /A quiénes venderás principalmente/, options.ambiguous ? "Personas y empresas" : "Personas");
+  await advanceTo(page, "#establishment");
+  await choose(page, /Qué tipo de negocio/, options.establishment ?? "Restaurante");
   await advanceTo(page, "#activity");
   await page.locator("#description").fill(options.description ?? "Restaurante de menú con delivery");
   await page.getByRole("button", { name: "Usar orientación local" }).click();
@@ -49,39 +44,29 @@ export async function fillProfile(page: Page, stage = "Mi negocio ya está forma
   await page.getByRole("radio", { name: options.legal === "juridica" ? /Como empresa/ : /A mi nombre/ }).check();
   await advanceTo(page, "#invoice");
   await choose(page, /Necesitarás emitir facturas/, options.invoice ?? "No");
-  if (options.online) {
-    await advanceTo(page, "#onlineOrders");
-    await choose(page, /pedidos por medios digitales/, "Sí");
-    await advanceTo(page, "#channels");
-    await page.getByRole("checkbox", { name: "WhatsApp" }).check();
-    await page.getByRole("checkbox", { name: "Aplicaciones de delivery" }).check();
+  if (options.stopAtSales) {
+    await advanceTo(page, "#typicalSales");
     return;
   }
+  await advanceTo(page, "#mode");
+  await choose(page, /Dónde prepararás/, "En un local donde atenderé clientes");
   if (stage === "Mi negocio ya está formalizado") {
     await advanceTo(page, "#rucStatus");
     await choose(page, /ya cuenta con RUC/, "Sí");
     await advanceTo(page, "#regime");
     await page.locator("#regime").selectOption(regime);
-  } else if (stage.includes("necesito formalizarlo")) {
+  } else if (stage.includes("trámites pendientes")) {
     await advanceTo(page, "#rucStatus");
     await choose(page, /ya cuenta con RUC/, "No");
   }
-  if (options.kitchen) {
-    await advanceTo(page, "#equipment");
-    await page.getByRole("checkbox", { name: "Cocina a gas", exact: true }).check();
-    await page.getByRole("checkbox", { name: "Hornos, parrillas o freidoras", exact: true }).check();
-    await advanceTo(page, "#smoke");
-    await choose(page, /bastante humo/, "Sí");
+}
+
+export async function editReviewField(page: Page, label: string, apply: () => Promise<void>) {
+  const button = page.getByRole("button", { name: "Cambiar " + label, exact: true });
+  if (!await button.isVisible()) {
+    await page.locator("details:not([open])").filter({ has: page.locator("button[aria-label=" + JSON.stringify("Cambiar " + label) + "]") }).locator("summary").click();
   }
-  await advanceTo(page, "#salesOrigin");
-}
-
-export async function fillSalesOrigin(page: Page, value = "Datos reales del ejercicio") {
-  await advanceTo(page, "#salesOrigin");
-  await choose(page, /cifras de ventas/, value);
-}
-
-export async function fillPurchasesOrigin(page: Page, value = "Datos reales del ejercicio") {
-  await advanceTo(page, "#purchasesOrigin");
-  await choose(page, /cifras de compras/, value);
+  await button.click();
+  await apply();
+  await page.getByRole("button", { name: "Guardar cambio" }).click();
 }

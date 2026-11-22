@@ -245,8 +245,8 @@ export class RuleEngine {
 
     const modern = context.assessmentVersion === 3;
     const strict = context.assessmentVersion !== undefined;
-    const salesKnown = !modern || context.financialOrigins?.sales === "real" || context.financialOrigins?.sales === "proyectado";
-    const purchasesKnown = !modern || context.financialOrigins?.purchases === "real" || context.financialOrigins?.purchases === "proyectado";
+    const salesKnown = !modern || context.financialOrigins?.sales === "real" || context.financialOrigins?.sales === "proyectado" || context.financialOrigins?.sales === "declarado";
+    const purchasesKnown = !modern || context.financialOrigins?.purchases === "real" || context.financialOrigins?.purchases === "proyectado" || context.financialOrigins?.purchases === "declarado";
     const monthlyRev = salesKnown ? strict ? context.maxMonthlyRevenue : context.monthlyRevenue : undefined;
     const exactSales = strict ? salesKnown && context.annualRevenue !== undefined : (
       monthlyRev !== undefined &&

@@ -54,7 +54,7 @@ export type CiiuClarification = keyof typeof ciiuClarifications;
 const ciiuCode = z.enum(ciiuCodes);
 export const ciiuInputSchema = z.strictObject({
   description: z.string().trim().min(4).max(500),
-  establishment: z.enum(["", "restaurante", "cafeteria", "polleria", "cevicheria", "pizzeria", "menu", "rapida", "delivery", "movil", "otro"]),
+  establishment: z.enum(["", "restaurante", "cafeteria", "polleria", "cevicheria", "pizzeria", "menu", "rapida", "delivery", "eventos", "movil", "otro"]),
   mode: z.enum(["", "local", "recojo", "delivery", "eventos", "movil", "desconocido"]),
   customers: z.enum(["", "personas", "empresas", "ambos", "aun-no-se"]),
 });

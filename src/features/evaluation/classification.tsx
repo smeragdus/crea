@@ -107,7 +107,7 @@ export function ClassificationField({ profile, primary, secondary, analysis, err
     <p className="text-sm text-muted-foreground">{help}</p>
     {!snapshot && !confirmed && !decisionPending && <>
       <div className="grid gap-2">
-        <label htmlFor="description" className="font-semibold">Descripción de tu negocio</label>
+        <label htmlFor="description" className="font-semibold">Cuéntanos brevemente qué ofrecerás en tu negocio</label>
         <textarea id="description" name="description" rows={4} maxLength={500} disabled={busy}
           aria-describedby="description-tip" value={profile.description} onChange={(event) => onDescription(event.target.value)}
           className="w-full rounded-xl border border-input bg-white p-3 placeholder:text-slate-500"

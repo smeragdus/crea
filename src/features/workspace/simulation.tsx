@@ -25,7 +25,7 @@ type SimField = typeof fields[number][0];
 
 export function Simulation({ context, recommendations }: { context: BusinessContext; recommendations: TaxRecommendation[] }) {
   const [values, setValues] = useState<Partial<Record<SimField, string>>>(() => ({
-    grossMonthlySales: context.monthlyRevenue?.toString(),
+    grossMonthlySales: (context.typicalMonthlyRevenue ?? context.monthlyRevenue)?.toString(),
     grossMonthlyPurchasesWithInvoice: context.monthlyPurchasesWithInvoice?.toString(),
     monthlyPurchasesWithoutInvoice: context.monthlyPurchasesWithoutInvoice?.toString(),
     monthlyOperatingExpenses: context.monthlyOperatingExpenses?.toString(),

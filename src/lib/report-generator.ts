@@ -63,7 +63,7 @@ export function buildDiagnosticReportData(
   function originLabel(key: string) {
     const origin = salesKeys.has(key) ? context.financialOrigins?.sales
       : purchaseKeys.has(key) ? context.financialOrigins?.purchases : undefined;
-    if (origin) return { real: "Real declarado", proyectado: "Proyectado", desconocido: "Desconocido" }[origin];
+    if (origin) return { real: "Real declarado", proyectado: "Proyectado", declarado: "Declarado", desconocido: "Desconocido" }[origin];
     return context.dataOrigins?.[key] === "VERIFICADO_FUENTE_OFICIAL" ? "Verificado en fuente oficial" : "Declarado";
   }
   return {

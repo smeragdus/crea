@@ -67,11 +67,21 @@ describe("Evaluación gastronómica por etapas", () => {
   });
 
   it("distingue proyecciones, desconocidos y ceros explícitos", () => {
-    expect(relevantAssessmentFields({ ...base, salesOrigin: "desconocido" })).not.toContain("annualSales");
+    expect(RuleEngine.recommendTax(toBusinessContext({ ...base, salesOrigin: "desconocido" }))[0].status).toBe("INFORMACION_INSUFICIENTE");
     expect(toBusinessContext({ ...base, purchasesOrigin: "desconocido" }).grossAnnualPurchases).toBeUndefined();
     expect(toBusinessContext({ ...base, annualSales: "0" }).annualRevenue).toBe(0);
-    expect(validateAssessmentStep({ ...base, stage: "idea" }, 1).salesOrigin).toBeTruthy();
+    expect(validateAssessmentStep({ ...base, stage: "idea" }, 1).salesOrigin).toBeUndefined();
     expect(validateAssessmentStep({ ...base, maxMonthlySales: "99999" }, 1).maxMonthlySales).toBeTruthy();
+  });
+
+  it("mantiene las estimaciones mensuales separadas de los montos que verifican los topes", () => {
+    const draft = { ...emptyDraft, stage: "operando", establishment: "restaurante", rucStatus: "unknown", typicalSales: "9000", typicalPurchases: "2200" } as const;
+    const context = toBusinessContext(draft);
+    expect(context).toMatchObject({ typicalMonthlyRevenue: 9000, typicalMonthlyPurchases: 2200, currentRegime: "DESCONOCIDO" });
+    expect(context.annualRevenue).toBeUndefined();
+    expect(context.maxMonthlyRevenue).toBeUndefined();
+    expect(relevantAssessmentFields(draft)).not.toContain("regime");
+    expect(fromBusinessContext(context).typicalPurchases).toBe("2200");
   });
 
   it("usa ingresos brutos para NRUS y netos para RER y RMT", () => {

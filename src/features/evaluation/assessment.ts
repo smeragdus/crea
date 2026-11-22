@@ -8,7 +8,7 @@ export const establishments = [
   ["restaurante", "Restaurante", ""], ["cafeteria", "Cafetería", ""], ["polleria", "Pollería", ""],
   ["cevicheria", "Cevichería", ""], ["pizzeria", "Pizzería", ""], ["menu", "Restaurante de menú o comida casera", ""],
   ["rapida", "Comida rápida", ""], ["delivery", "Cocina exclusiva para delivery", ""],
-  ["movil", "Food truck o puesto móvil", ""], ["otro", "Otro establecimiento gastronómico similar", ""],
+  ["eventos", "Servicio de comidas para eventos", ""], ["movil", "Food truck o puesto móvil", ""], ["otro", "Otro establecimiento gastronómico similar", ""],
 ] as const;
 export const digitalChannels = [
   ["whatsapp", "WhatsApp"], ["redes", "Facebook, Instagram u otras redes sociales"],
@@ -31,9 +31,9 @@ export const registration = [
 ] as const;
 
 export const stages = [
-  ["idea", "Solo tengo una idea de negocio", "Explora opciones con datos que puedas proyectar."],
+  ["idea", "Solo tengo una idea", "Explora opciones con datos que puedas proyectar."],
   ["preparacion", "Estoy preparando mi negocio", "Planea los trámites antes de abrir."],
-  ["operando", "Mi negocio ya funciona, pero necesito formalizarlo", "Identifica qué trámites faltan."],
+  ["operando", "Ya estoy vendiendo, pero tengo trámites pendientes", "Identifica qué trámites faltan."],
   ["formalizado", "Mi negocio ya está formalizado", "Revisa tu régimen y obligaciones."],
 ] as const;
 export const origins = [
@@ -42,11 +42,11 @@ export const origins = [
   ["desconocido", "Todavía no tengo cifras", ""],
 ] as const;
 export const modes = [
-  ["local", "Atención en el establecimiento", "También puedes ofrecer recojo o delivery."],
+  ["local", "En un local donde atenderé clientes", ""],
   ["recojo", "Para llevar", ""],
-  ["delivery", "Delivery", "Entrega a domicilio."],
+  ["delivery", "En una cocina exclusiva para pedidos o delivery", ""],
   ["eventos", "Preparación de comidas para eventos o por contrato", ""],
-  ["movil", "Puesto móvil o itinerante", ""],
+  ["movil", "En un puesto móvil", ""],
   ["desconocido", "Todavía no lo sé", ""],
 ] as const;
 export const customers = [
@@ -94,8 +94,10 @@ const draftSchema = z.object({
   activityAnalysis: z.string().max(700),
   activityEvidence: z.enum([...ciiuCodes, "unknown", ""]),
   secondary: z.string().max(40),
-  salesOrigin: z.enum(["real", "proyectado", "desconocido", ""]),
-  purchasesOrigin: z.enum(["real", "proyectado", "desconocido", ""]),
+  salesOrigin: z.enum(["real", "proyectado", "declarado", "desconocido", ""]),
+  purchasesOrigin: z.enum(["real", "proyectado", "declarado", "desconocido", ""]),
+  typicalSales: amountText,
+  typicalPurchases: amountText,
   grossAnnualSales: amountText,
   grossPurchases: amountText,
   workforce: yesNo,
@@ -131,6 +133,7 @@ export const emptyDraft: AssessmentDraft = {
   establishment: "", onlineOrders: "", channels: "", equipment: "", smoke: "", constituted: "",
   name: "", activity: "", activityAnalysis: "", legal: "", regime: "", invoice: "",
   stage: "", description: "", activityEvidence: "", secondary: "",
+  typicalSales: "", typicalPurchases: "",
   salesOrigin: "", purchasesOrigin: "", grossAnnualSales: "", grossPurchases: "", workforce: "", domicile: "", priorRmt: "",
   partners: "", mode: "", fixedPlace: "", customers: "", rucStatus: "",
   risk: "", license: "", itse: "", nrusRestriction: "", rerRestriction: "",
@@ -155,6 +158,8 @@ export const assessmentFieldLabels: Record<AssessmentField, string> = {
   activityAnalysis: "Sugerencia CIIU",
   activityEvidence: "Modalidad de la actividad",
   secondary: "Actividades secundarias",
+  typicalSales: "Ventas habituales al mes",
+  typicalPurchases: "Compras habituales al mes",
   salesOrigin: "Origen de las ventas",
   purchasesOrigin: "Origen de las compras",
   grossAnnualSales: "Ingresos brutos anuales",
@@ -169,7 +174,7 @@ export const assessmentFieldLabels: Record<AssessmentField, string> = {
   smoke: "Humo, vapor o grasa",
   constituted: "Constitución inscrita en SUNARP",
   partners: "Cantidad de socios",
-  mode: "Modalidad de atención",
+  mode: "Lugar principal del negocio",
   fixedPlace: "Establecimiento fijo",
   customers: "Tipo de clientes",
   rucStatus: "Inscripción en el RUC",
@@ -194,25 +199,27 @@ export const assessmentFieldLabels: Record<AssessmentField, string> = {
   name: "Nombre del restaurante",
 };
 const required = ["regime", "activity", "legal", "invoice"] as const;
+export const routeAssessmentFields = ["risk", "license", "itse", "equipment", "smoke", "workforce", "constituted"] as const;
+
 export const assessmentFields = [
-  ["establishment", "stage", "description", "mode", "customers", "activity", "fixedPlace", "legal", "partners", "constituted", "invoice", "onlineOrders", "channels", "rucStatus", "regime", "risk", "license", "itse", "equipment", "smoke", "workforce"],
-  ["salesOrigin", "annualSales", "grossAnnualSales", "maxMonthlySales", "purchasesOrigin", "annualPurchases", "grossPurchases", "maxMonthlyPurchases"],
+  ["stage", "establishment", "description", "activity", "legal", "invoice", "typicalSales", "typicalPurchases", "mode", "rucStatus", "regime", ...routeAssessmentFields],
+  ["salesOrigin", "annualSales", "grossAnnualSales", "maxMonthlySales", "annualPurchases", "grossPurchases", "maxMonthlyPurchases"],
   ["locations", "assets", "workers", "nrusRestriction", "rerRestriction", "foreignBranch", "linkage", "domicile", "priorRmt"],
   ["name"],
 ] as const;
 
 export function declaredMode(draft: AssessmentDraft): AssessmentDraft["mode"] {
   if (draft.establishment === "delivery" || draft.establishment === "movil") return draft.establishment;
-  return draft.mode;
+  return draft.mode || (draft.establishment === "eventos" ? "eventos" : "");
 }
 
 export function relevantAssessmentFields(draft: AssessmentDraft): AssessmentField[] {
   const modern = Boolean(draft.stage);
   const planned = isPlanning(draft.stage);
   const mode = declaredMode(draft);
-  const fixedPlace = mode === "local" || draft.fixedPlace === "yes";
-  const salesKnown = !modern || draft.salesOrigin === "real" || draft.salesOrigin === "proyectado";
-  const purchasesKnown = !modern || draft.purchasesOrigin === "real" || draft.purchasesOrigin === "proyectado";
+  const fixedPlace = mode === "local" || (mode === "delivery" && draft.fixedPlace !== "no") || draft.fixedPlace === "yes";
+  const salesKnown = !modern || draft.salesOrigin !== "desconocido";
+  const purchasesKnown = !modern || draft.purchasesOrigin !== "desconocido";
   const exceeds = (field: AssessmentField, limit: number) => (amount(draft[field]) ?? 0) > limit;
   // Evaluate in question order so a disqualifying answer stays visible and editable.
   const monthly = draft.legal !== "juridica" && draft.invoice !== "yes"
@@ -237,21 +244,20 @@ export function relevantAssessmentFields(draft: AssessmentDraft): AssessmentFiel
     customers: modern,
     invoice: modern || draft.legal !== "juridica",
     rucStatus: modern && !planned,
-    regime: !modern || (!planned && draft.rucStatus !== "no"),
+    regime: !modern || (!planned && draft.rucStatus === "yes"),
     risk: modern && fixedPlace,
     license: modern && !planned && fixedPlace,
     itse: modern && !planned && fixedPlace,
-    salesOrigin: modern,
-    purchasesOrigin: modern,
+    salesOrigin: false,
     workforce: modern,
     domicile: modern && (nrusLocations || rer || rmt),
     priorRmt: modern && !planned && rmt && draft.foreignBranch !== "yes" && draft.linkage !== "yes",
-    grossPurchases: modern && purchasesKnown && draft.legal !== "juridica" && draft.invoice !== "yes",
-    annualSales: salesKnown,
-    grossAnnualSales: modern && salesKnown && draft.legal !== "juridica" && draft.invoice !== "yes",
-    annualPurchases: purchasesKnown && (!modern || !salesKnown || !exceeds("annualSales", RER_ANNUAL_INCOME_LIMIT)),
-    maxMonthlySales: monthly && salesKnown,
-    maxMonthlyPurchases: monthly && purchasesKnown,
+    grossPurchases: modern && draft.legal !== "juridica" && draft.invoice !== "yes",
+    annualSales: true,
+    grossAnnualSales: modern && draft.legal !== "juridica" && draft.invoice !== "yes",
+    annualPurchases: (!modern || !salesKnown || !exceeds("annualSales", RER_ANNUAL_INCOME_LIMIT)),
+    maxMonthlySales: monthly,
+    maxMonthlyPurchases: monthly,
     nrusRestriction: modern && nrusLocations,
     rerRestriction: modern && rer,
     locations: nrusLocations,
@@ -280,7 +286,7 @@ export function validateAssessmentStep(draft: AssessmentDraft, step: number, vis
       if (visible.includes(field) && !draft[field]) issues[field] = "Selecciona una opción. Puedes indicar que no sabes.";
     }
     if (draft.stage) {
-      for (const field of ["establishment", "mode", "fixedPlace", "customers", "rucStatus"] as const) {
+      for (const field of ["establishment", "mode", "rucStatus"] as const) {
         if (visible.includes(field) && !draft[field]) issues[field] = "Selecciona una opción. Puedes indicar que no sabes.";
       }
     }
@@ -290,15 +296,7 @@ export function validateAssessmentStep(draft: AssessmentDraft, step: number, vis
       issues.activity = "Confirma el código o indica que la clasificación queda pendiente.";
     }
   }
-  if (step === 1 && draft.stage) {
-    if (!draft.salesOrigin) issues.salesOrigin = "Indica el origen de las ventas.";
-    if (!draft.purchasesOrigin) issues.purchasesOrigin = "Indica el origen de las compras.";
-    if (isPlanning(draft.stage)) {
-      if (draft.salesOrigin === "real") issues.salesOrigin = "Selecciona proyección o datos desconocidos.";
-      if (draft.purchasesOrigin === "real") issues.purchasesOrigin = "Selecciona proyección o datos desconocidos.";
-    }
-  }
-  if (step === 1 && visible.includes("maxMonthlySales")) {
+  if (step === 1 && (visible.includes("maxMonthlySales") || visible.includes("maxMonthlyPurchases"))) {
     for (const [monthly, yearly] of [["maxMonthlySales", draft.stage ? "grossAnnualSales" : "annualSales"], ["maxMonthlyPurchases", draft.stage ? "grossPurchases" : "annualPurchases"]] as const) {
       if (visible.includes(monthly) && visible.includes(yearly) && draft[monthly] !== "" && draft[yearly] !== "" && Number(draft[monthly].replace(",", ".")) > Number(draft[yearly].replace(",", "."))) {
         issues[monthly] = "El máximo de un mes debe ser menor o igual al total anual.";
@@ -312,7 +310,7 @@ type MissingRule = readonly [string, ...AssessmentField[]];
 const missingRules: Record<TaxRecommendation["code"], readonly MissingRule[]> = {
   NRUS: [
     ["TR-NRUS-02", "grossAnnualSales", "annualSales", "maxMonthlySales", "salesOrigin"],
-    ["TR-NRUS-03", "grossPurchases", "annualPurchases", "maxMonthlyPurchases", "purchasesOrigin"],
+    ["TR-NRUS-03", "grossPurchases", "annualPurchases", "maxMonthlyPurchases"],
     ["TR-NRUS-01", "legal"],
     ["TR-NRUS-04", "invoice"],
     ["TR-NRUS-05", "locations"],
@@ -320,7 +318,7 @@ const missingRules: Record<TaxRecommendation["code"], readonly MissingRule[]> = 
   ],
   RER: [
     ["TR-RER-01", "annualSales", "salesOrigin"],
-    ["TR-RER-02", "annualPurchases", "purchasesOrigin"],
+    ["TR-RER-02", "annualPurchases"],
     ["TR-RER-03", "assets"],
     ["TR-RER-04", "workers"], ["TR-RER-05", "rerRestriction"], ["TR-RER-06", "domicile"],
   ],
@@ -369,27 +367,36 @@ export function toBusinessContext(draft: AssessmentDraft, previous?: BusinessCon
   const classification = confirmedClassification(draft.activity, draft.activityEvidence, draft.secondary);
   const activity = modern ? classification?.primary ?? "" : draft.activity === "unknown" ? "" : draft.activity;
   const financialOrigin = (value: string): FinancialOrigin =>
-    value === "proyectado" || (value === "real" && !isPlanning(draft.stage)) ? value : "desconocido";
-  const partnerCount = amount(included("partners"));
+    value === "proyectado" || (value === "real" && !isPlanning(draft.stage)) ? value
+      : value === "desconocido" || ![included("annualSales"), included("grossAnnualSales"), included("maxMonthlySales")].some(Boolean)
+        ? "desconocido" : isPlanning(draft.stage) ? "proyectado" : "declarado";
+  const hasPurchaseAmounts = (["annualPurchases", "grossPurchases", "maxMonthlyPurchases"] as const).some((field) => included(field) !== "");
+  const purchaseOrigin: FinancialOrigin = !hasPurchaseAmounts || draft.purchasesOrigin === "desconocido" ? "desconocido"
+    : isPlanning(draft.stage) ? "proyectado" : draft.purchasesOrigin === "real" || draft.purchasesOrigin === "proyectado" ? draft.purchasesOrigin : "declarado";
+  const purchaseAmount = (field: "annualPurchases" | "grossPurchases" | "maxMonthlyPurchases") =>
+    purchaseOrigin === "desconocido" && modern ? undefined : amount(included(field));
+  const partnerCount = draft.legal === "natural" ? undefined : amount(draft.partners);
   const mode = declaredMode(draft);
   return {
     ...previous,
     ...cajamarcaLocation,
     assessmentVersion: modern ? 3 : 2,
     establishment: draft.establishment || undefined,
-    digitalOrders: boolean(included("onlineOrders")),
-    orderChannels: selectionOptions(included("channels"), digitalChannels).map(([key]) => key),
+    digitalOrders: boolean(draft.onlineOrders),
+    orderChannels: selectionOptions(draft.channels, digitalChannels).map(([key]) => key),
     kitchenEquipment: selectionOptions(included("equipment"), kitchenEquipment).map(([key]) => key),
     kitchenSmoke: boolean(included("smoke")),
     constitutionRegistered: boolean(included("constituted")),
     stage: draft.stage || undefined,
-    financialOrigins: modern ? { sales: financialOrigin(draft.salesOrigin), purchases: financialOrigin(draft.purchasesOrigin) } : undefined,
+    financialOrigins: modern ? { sales: financialOrigin(draft.salesOrigin), purchases: purchaseOrigin } : undefined,
     ciiuClassification: classification,
     ciiuStatus: classification ? "confirmada" : draft.activity === "review" ? "revision" : "pendiente",
     ciiuSuggestionSource: classification ? readCiiuSnapshot(draft.activityAnalysis)?.source ?? previous?.ciiuSuggestionSource : undefined,
     operationMode: mode || undefined,
+    typicalMonthlyRevenue: amount(draft.typicalSales),
+    typicalMonthlyPurchases: amount(draft.typicalPurchases),
     grossAnnualRevenue: amount(included("grossAnnualSales")),
-    grossAnnualPurchases: amount(included("grossPurchases")),
+    grossAnnualPurchases: purchaseAmount("grossPurchases"),
     domiciledInPeru: boolean(included("domicile")),
     rmtPriorYearOverLimit: boolean(included("priorRmt")),
     hasRuc: boolean(included("rucStatus")),
@@ -408,14 +415,14 @@ export function toBusinessContext(draft: AssessmentDraft, previous?: BusinessCon
     personType: draft.legal === "natural" ? "PERSONA_NATURAL" : draft.legal === "juridica" ? "PERSONA_JURIDICA" : undefined,
     hasPartners: modern ? (partnerCount ?? 0) > 0 : previous?.hasPartners ?? false,
     partnerCount: modern ? partnerCount ?? 0 : previous?.partnerCount ?? 0,
-    hasPhysicalLocation: modern ? mode === "local" || included("fixedPlace") === "yes" : locations !== undefined,
-    hasLocal: modern ? mode === "local" ? true : boolean(included("fixedPlace")) : previous?.hasLocal,
+    hasPhysicalLocation: modern ? mode === "local" || (mode === "delivery" && draft.fixedPlace !== "no") || draft.fixedPlace === "yes" : locations !== undefined,
+    hasLocal: modern ? mode === "local" || (mode === "delivery" && draft.fixedPlace !== "no") ? true : boolean(draft.fixedPlace) : previous?.hasLocal,
     servesPublic: modern ? mode === "local" || mode === "movil" : previous?.servesPublic ?? true,
     hasEmployees: modern ? boolean(included("workforce")) : workers === undefined ? undefined : workers > 0,
     employeeCount: workers ?? 0,
     employeeCountPerShift: workers,
     employees: workers,
-    sellsOnline: modern ? boolean(included("onlineOrders")) ?? (mode === "delivery") : previous?.sellsOnline ?? false,
+    sellsOnline: modern ? boolean(draft.onlineOrders) ?? (mode === "delivery") : previous?.sellsOnline ?? false,
     preparesFood: modern ? Boolean(classification && classification.primary !== "5630") : true,
     importsGoods: previous?.importsGoods ?? false,
     exportsGoods: previous?.exportsGoods ?? false,
@@ -428,11 +435,11 @@ export function toBusinessContext(draft: AssessmentDraft, previous?: BusinessCon
     hasMultipleLocations: locations !== undefined && locations > 1,
     foreignSourceIncome: previous?.foreignSourceIncome ?? false,
     collectsPersonalData: previous?.collectsPersonalData ?? false,
-    currentRegime: modern && (isPlanning(draft.stage) || draft.rucStatus === "no") ? "SIN_REGIMEN" : draft.regime || "DESCONOCIDO",
+    currentRegime: modern && (isPlanning(draft.stage) || draft.rucStatus === "no") ? "SIN_REGIMEN" : modern && draft.rucStatus !== "yes" ? "DESCONOCIDO" : draft.regime || "DESCONOCIDO",
     annualRevenue: amount(included("annualSales")),
-    annualPurchases: amount(included("annualPurchases")),
+    annualPurchases: purchaseAmount("annualPurchases"),
     maxMonthlyRevenue: amount(included("maxMonthlySales")),
-    maxMonthlyPurchases: amount(included("maxMonthlyPurchases")),
+    maxMonthlyPurchases: purchaseAmount("maxMonthlyPurchases"),
     fixedAssets: amount(included("assets")),
     fixedAssetsValue: amount(included("assets")),
     hasCorporateLinkageOverLimit: boolean(included("linkage")),
@@ -456,9 +463,11 @@ export function fromBusinessContext(context: BusinessContext): AssessmentDraft {
     activity: context.stage ? isCiiuCode(code) ? code : context.ciiuStatus === "revision" ? "review" : "unknown" : activity,
     activityEvidence: isCiiuCode(code) ? code : "unknown",
     secondary: context.ciiuClassification?.secondary.join(",") ?? "",
-    salesOrigin: context.financialOrigins?.sales ?? "",
+    salesOrigin: context.financialOrigins?.sales === "desconocido" ? "" : context.financialOrigins?.sales ?? "",
     purchasesOrigin: context.financialOrigins?.purchases ?? "",
-    grossAnnualSales: value(context.grossAnnualRevenue),
+    typicalSales: value(context.typicalMonthlyRevenue),
+    typicalPurchases: value(context.typicalMonthlyPurchases),
+    grossAnnualSales: value(context.financialOrigins?.sales === "desconocido" ? undefined : context.grossAnnualRevenue),
     grossPurchases: value(context.grossAnnualPurchases),
     domicile: choice(context.domiciledInPeru),
     priorRmt: choice(context.rmtPriorYearOverLimit),
@@ -482,9 +491,9 @@ export function fromBusinessContext(context: BusinessContext): AssessmentDraft {
     legal: context.legalPerson,
     regime: context.currentRegime ?? "DESCONOCIDO",
     invoice: choice(context.needsFacturas ?? context.needsInvoices),
-    annualSales: value(context.annualRevenue),
+    annualSales: value(context.financialOrigins?.sales === "desconocido" ? undefined : context.annualRevenue),
     annualPurchases: value(context.annualPurchases),
-    maxMonthlySales: value(context.maxMonthlyRevenue),
+    maxMonthlySales: value(context.financialOrigins?.sales === "desconocido" ? undefined : context.maxMonthlyRevenue),
     maxMonthlyPurchases: value(context.maxMonthlyPurchases),
     assets: value(context.fixedAssetsValue ?? context.fixedAssets),
     workers: value(context.employeeCountPerShift ?? context.employees),

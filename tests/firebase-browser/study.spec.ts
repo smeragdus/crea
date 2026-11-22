@@ -84,10 +84,8 @@ test("registro, persistencia, administración y estudio completo en Firebase Emu
   await expect(page.getByRole("banner").getByRole("link", { name: "Ingresar", exact: true })).toBeVisible();
 
   await page.goto("/negocios/nuevo");
-  const { advanceTo, fillProfile, fillPurchasesOrigin, fillSalesOrigin } = await import("../helpers/assessment");
+  const { advanceTo, fillProfile } = await import("../helpers/assessment");
   await fillProfile(page);
-  await fillSalesOrigin(page, "Todavía no tengo cifras");
-  await fillPurchasesOrigin(page, "Todavía no tengo cifras");
   await advanceTo(page, "#name");
   await page.getByLabel("Nombre del restaurante (opcional)").fill("Ficha sintética de prueba");
   await page.getByRole("button", { name: "Ver mi diagnóstico" }).click();

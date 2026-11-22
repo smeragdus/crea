@@ -18,7 +18,7 @@ export type RestaurantActivityCode =
   | "CATERING_EVENTOS";
 
 export type BusinessStage = "idea" | "preparacion" | "operando" | "formalizado";
-export type FinancialOrigin = "real" | "proyectado" | "desconocido";
+export type FinancialOrigin = "real" | "proyectado" | "declarado" | "desconocido";
 
 export type BusinessContext = {
   assessmentVersion?: 2 | 3;
@@ -27,7 +27,7 @@ export type BusinessContext = {
   ciiuStatus?: "confirmada" | "pendiente" | "revision";
   ciiuSuggestionSource?: "local" | "ia";
   ciiuClassification?: { version: string; primary: string; secondary: string[] };
-  establishment?: "restaurante" | "cafeteria" | "polleria" | "cevicheria" | "pizzeria" | "menu" | "rapida" | "delivery" | "movil" | "otro";
+  establishment?: "restaurante" | "cafeteria" | "polleria" | "cevicheria" | "pizzeria" | "menu" | "rapida" | "delivery" | "eventos" | "movil" | "otro";
   digitalOrders?: boolean;
   orderChannels?: string[];
   kitchenEquipment?: string[];
@@ -89,6 +89,8 @@ export type BusinessContext = {
   currentRegime?: TaxRegimeCode | "DESCONOCIDO" | "SIN_REGIMEN";
   ciiu?: string;
   restaurantSpecialty?: RestaurantActivityCode;
+  typicalMonthlyRevenue?: number;
+  typicalMonthlyPurchases?: number;
   annualRevenue?: number;
   monthlyPurchasesWithInvoice?: number;
   monthlyPurchasesWithoutInvoice?: number;

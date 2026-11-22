@@ -14,7 +14,7 @@ import { ProjectionCalculator } from "@/features/workspace/projection-calculator
 import { LinkButton, Notice, PageHeading } from "@/components/ui/primitives";
 import { useSession } from "@/features/auth/session";
 import { useUnfinishedAssessment } from "./assessment-entry";
-import { activities, digitalChannels, establishments, kitchenEquipment, selectionOptions, assessmentFieldLabels, assessmentFields, choices, customers, declaredMode, restoreAssessmentDraft, fromBusinessContext, isPlanning, modes, origins, regimes, registration, relevantAssessmentFields, risks, stages, toBusinessContext, validateAssessmentStep, type AssessmentDraft, type AssessmentField } from "./assessment";
+import { activities, digitalChannels, establishments, kitchenEquipment, selectionOptions, assessmentFieldLabels, assessmentFields, choices, customers, declaredMode, restoreAssessmentDraft, fromBusinessContext, isPlanning, modes, origins, regimes, registration, relevantAssessmentFields, routeAssessmentFields, risks, stages, toBusinessContext, validateAssessmentStep, type AssessmentDraft, type AssessmentField } from "./assessment";
 import { ChoiceField, MultiChoiceField, SelectField, TextField } from "./assessment-fields";
 import { limaDay, readAssessment, readDraft, saveAssessment, storeDraft, type AssessmentSnapshot, type DraftSnapshot } from "./session-storage";
 
@@ -27,6 +27,9 @@ const steps = [
 
 const diagnosisHref = "/negocios?seccion=diagnostico";
 const reviewStep = steps.length - 1;
+const optionalAtReview = new Set<AssessmentField>([...assessmentFields[1], ...assessmentFields[2], ...routeAssessmentFields]);
+const salesFields = new Set<AssessmentField>(["annualSales", "grossAnnualSales", "maxMonthlySales"]);
+const purchaseFields = new Set<AssessmentField>(["annualPurchases", "grossPurchases", "maxMonthlyPurchases"]);
 type Edit = { fields: AssessmentField[]; original: AssessmentDraft; returnToDiagnosis?: boolean };
 type Errors = ReturnType<typeof validateAssessmentStep>;
 
@@ -71,30 +74,25 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
     const visible = relevantAssessmentFields(draft);
     if (!draft.establishment || !draft.stage) return 0;
     const restoredStep = assessmentFields[restored.step];
-    return restoredStep?.some((field) => visible.includes(field)) ? restored.step : reviewStep;
+    return restoredStep?.some((field) => visible.includes(field) && !optionalAtReview.has(field)) ? restored.step : reviewStep;
   });
-  const [cursor, setCursor] = useState<AssessmentField | undefined>(() => restored?.question === "description" ? "activity" : restored?.question);
+  const [cursor, setCursor] = useState<AssessmentField | undefined>(() => restored?.question === "description" ? "activity" : restored?.question === "purchasesOrigin" ? "annualPurchases" : restored?.question);
   const [edit, setEdit] = useState<Edit | null>(() => requestedField && relevantAssessmentFields(draft).includes(requestedField)
     ? { fields: [requestedField], original: draft, returnToDiagnosis: true } : null);
+  const [openReview, setOpenReview] = useState<Record<number, boolean>>({});
   const [errors, setErrors] = useState<Errors>({});
   const [failure, setFailure] = useState("");
   const heading = useRef<HTMLHeadingElement>(null);
   const returnFocus = useRef<AssessmentField | null>(null);
   const moved = useRef(Boolean(edit));
   const visible = relevantAssessmentFields(draft);
-  const activeSteps = steps.map((_, index) => index).filter((index) => assessmentFields[index].some((field) => visible.includes(field)));
+  const activeSteps = steps.map((_, index) => index).filter((index) => assessmentFields[index].some((field) => visible.includes(field) && !optionalAtReview.has(field)));
   const chapter = activeSteps.indexOf(step);
-  // Keep each financial bundle together so projections and amounts can be checked side by side.
-  const groupsFor = (index: number): AssessmentField[][] => {
-    const fields = assessmentFields[index].filter((field) => visible.includes(field));
-    if (index !== 1 || !draft.stage) return fields.filter((field) => field !== "description").map((field) => [field]);
-    return [
-      fields.filter((field) => field === "salesOrigin" || ["annualSales", "grossAnnualSales", "maxMonthlySales"].includes(field)),
-      fields.filter((field) => field === "purchasesOrigin" || ["annualPurchases", "grossPurchases", "maxMonthlyPurchases"].includes(field)),
-    ].filter((group) => group.length);
-  };
+  const groupsFor = (index: number) => assessmentFields[index]
+    .filter((field) => visible.includes(field) && !optionalAtReview.has(field) && field !== "description")
+    .map((field) => [field]);
   const groups = groupsFor(step);
-  const position = Math.max(0, groups.findIndex((group) => cursor && group.includes(cursor)));
+  const position = Math.max(0, groups.findIndex((group) => cursor && (group as AssessmentField[]).includes(cursor)));
   const currentGroup = groups[position] ?? [];
   const [focusedQuestion, setFocusedQuestion] = useState("");
   const helpField = edit?.fields[0] ?? cursor;
@@ -132,11 +130,13 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
   function update(key: AssessmentField, value: string) {
     setDraft((current) => {
       const next = { ...current, [key]: value };
+      if ((key === "typicalSales" || salesFields.has(key)) && current.salesOrigin === "desconocido") next.salesOrigin = "";
+      if ((key === "typicalPurchases" || purchaseFields.has(key)) && current.purchasesOrigin === "desconocido") next.purchasesOrigin = "";
       if (key === "stage" && isPlanning(value)) {
         if (next.salesOrigin === "real") next.salesOrigin = "";
         if (next.purchasesOrigin === "real") next.purchasesOrigin = "";
       }
-      if (((key === "description" || key === "establishment") && current[key] !== value) || declaredMode(current) !== declaredMode(next)) {
+      if (((key === "description" || key === "establishment") && current[key] !== value)) {
         next.activity = "";
         next.activityEvidence = "";
         next.secondary = "";
@@ -197,10 +197,10 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
     event.preventDefault();
     if (edit) {
       const before = relevantAssessmentFields(edit.original);
-      const issues = Object.assign({}, ...activeSteps.map((index) => validateAssessmentStep(draft, index, visible))) as Errors;
+      const issues = Object.assign({}, ...assessmentFields.map((_, index) => validateAssessmentStep(draft, index, visible))) as Errors;
       const invalid = Object.keys(issues) as AssessmentField[];
       const additional = visible.filter((field) => !edit.fields.includes(field)
-        && ((!before.includes(field) && (!draft[field] || draft[field] === "unknown")) || invalid.includes(field)));
+        && ((!optionalAtReview.has(field) && !before.includes(field) && (!draft[field] || draft[field] === "unknown")) || invalid.includes(field)));
       if (additional.length) {
         setEdit({ ...edit, fields: [...edit.fields, ...additional] });
         setErrors(issues);
@@ -229,11 +229,12 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
       else goTo(activeSteps[chapter + 1]);
       return;
     }
-    for (const index of activeSteps) {
+    for (const index of assessmentFields.keys()) {
       const issues = validateAssessmentStep(draft, index, visible);
       const field = Object.keys(issues)[0] as AssessmentField | undefined;
       if (field) {
-        goTo(index, field === "description" ? "activity" : field);
+        if (optionalAtReview.has(field)) startEdit(field);
+        else goTo(index, field === "description" ? "activity" : field);
         setErrors(issues);
         focusField(field);
         return;
@@ -253,7 +254,33 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
     <ClassificationField key={id} profile={{ description: draft.description, mode: declaredMode(draft), establishment: draft.establishment, customers: draft.customers }}
       primary={draft.activity} secondary={draft.secondary} analysis={draft.activityAnalysis} error={errors.activity ?? errors.description}
       onDescription={(value) => update("description", value)} onAnalysis={(value) => update("activityAnalysis", value)} onDecision={decideActivity} /> :
-    <Question key={id} id={id} draft={draft} value={draft[id]} error={errors[id]} onChange={(value) => update(id, value)} />;
+    id === "typicalSales" || id === "typicalPurchases" ? <section key={id} className="grid gap-4">
+      <Question id={id} draft={draft} value={draft[id]} error={errors[id]} onChange={(value) => update(id, value)} />
+      <Button type="button" variant="outline" className="justify-self-start" aria-pressed={!draft[id]} onClick={() => update(id, "")}>Todavía no lo sé</Button>
+      {id === "typicalSales" && <ProjectionCalculator taxBreakdown={{ required: false, reducedAvailable: draft.activity === "5610" }}
+        onApply={(amounts, month, netAnnual) => {
+          update("typicalSales", month.toFixed(2));
+          update("salesOrigin", "proyectado");
+          update("grossAnnualSales", amounts.annual.toFixed(2));
+          update("maxMonthlySales", amounts.maxMonth.toFixed(2));
+          if (netAnnual !== undefined) update("annualSales", netAnnual.toFixed(2));
+        }} />}
+    </section> : <div key={id} className="grid gap-3">
+      <Question id={id} draft={draft} value={draft[id]} error={errors[id]} onChange={(value) => update(id, value)} />
+      {planning && (id === "grossAnnualSales" || id === "grossPurchases" || id === "annualSales" || id === "annualPurchases") && (() => {
+        const monthly = purchaseFields.has(id) ? draft.typicalPurchases : draft.typicalSales;
+        if (!/^\d+(?:[.,]\d{1,2})?$/.test(monthly)) return null;
+        const annual = Number(monthly.replace(",", ".")) * 12;
+        if (annual > 999999999999) return null;
+        const basis = id === "annualSales" ? "son ingresos netos sin IGV"
+          : id === "annualPurchases" ? "son adquisiciones para el RER y excluyen activos fijos"
+            : "son montos brutos";
+        return <div className="grid gap-1">
+          <p className="text-sm text-muted-foreground">Puedes reutilizar el monto mensual si {basis} y esperas el mismo importe durante los 12 meses. Si cambia por temporada, ingresa el total estimado del año.</p>
+          <Button type="button" variant="outline" className="justify-self-start" onClick={() => update(id, annual.toFixed(2))}>Confirmar S/ {annual.toFixed(2)} al año</Button>
+        </div>;
+      })()}
+    </div>;
 
   return <div className={styles.background}>
     <div className={styles.shell}>
@@ -289,24 +316,8 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
               {currentFields.slice(1).map(field)}
             </section>}
           </> : step === reviewStep ? <>
-            <Review draft={draft} visible={visible} edit={startEdit} />
+            <Review draft={draft} visible={visible} edit={startEdit} open={openReview} setOpen={(index, value) => setOpenReview((state) => ({ ...state, [index]: value }))} />
             {field("name")}
-          </> : step === 1 && draft.stage ? <>
-            {currentFields.includes("salesOrigin") && <section className="grid gap-4">
-              {field("salesOrigin")}
-              {draft.salesOrigin === "proyectado" && <ProjectionCalculator
-                taxBreakdown={{ required: !visible.includes("grossAnnualSales"), reducedAvailable: draft.activity === "5610" }}
-                onApply={(amounts, _month, netAnnual) => {
-                  update("grossAnnualSales", amounts.annual.toFixed(2));
-                  update("maxMonthlySales", amounts.maxMonth.toFixed(2));
-                  if (netAnnual !== undefined) update("annualSales", netAnnual.toFixed(2));
-                }} />}
-              <div className="grid gap-5 sm:grid-cols-2">{currentFields.filter((id) => ["annualSales", "grossAnnualSales", "maxMonthlySales"].includes(id)).map(field)}</div>
-            </section>}
-            {currentFields.includes("purchasesOrigin") && <section className="grid gap-4">
-              {field("purchasesOrigin")}
-              <div className="grid gap-5 sm:grid-cols-2">{currentFields.filter((id) => ["annualPurchases", "grossPurchases", "maxMonthlyPurchases"].includes(id)).map(field)}</div>
-            </section>}
           </> : currentFields.map(field)}
           {!previous && !edit && <p className="text-sm text-slate-600">Tus respuestas se guardan en esta pestaña. {unfinished && <LinkButton href="/" variant="ghost" className="text-[#0a4db7]">Pausar evaluación</LinkButton>}</p>}
           {failure && <Notice tone="error">{failure}</Notice>}
@@ -328,6 +339,8 @@ function Wizard({ uid, previous, restored, requestedField }: { uid?: string; pre
 }
 
 const numberQuestions = {
+  typicalSales: ["¿Cuánto vendes o calculas que venderás al mes?", "Monto aproximado en soles. Si todavía no lo sabes, déjalo en blanco."],
+  typicalPurchases: ["¿Cuánto gastas o calculas gastar al mes en compras para tu negocio?", "Incluye ingredientes, insumos y mercadería. Excluye alquiler, sueldos y otros gastos operativos. Si todavía no lo sabes, déjalo en blanco."],
   annualSales: ["Ventas anuales", "Para RER y RMT usa los ingresos netos de todo el ejercicio, sin IGV si corresponde. Si el año sigue abierto, proyecta el cierre o deja el dato pendiente."],
   grossAnnualSales: ["Ingresos brutos anuales", "Para el Nuevo RUS indica el total bruto del ejercicio."],
   annualPurchases: ["Compras anuales", "Para el RER suma las adquisiciones afectadas al negocio y excluye los activos fijos."],
@@ -344,13 +357,13 @@ type QuestionProps = { id: AssessmentField; draft: AssessmentDraft; value: strin
 function Question({ draft, ...props }: QuestionProps) {
   switch (props.id) {
     case "establishment":
-      return <ChoiceField {...props} label="¿Qué tipo de establecimiento tienes o quisieras abrir?" options={establishments} />;
+      return <ChoiceField {...props} label="¿Qué tipo de negocio tienes o quisieras abrir?" options={establishments} />;
     case "stage":
       return <ChoiceField {...props} label="¿En qué etapa está tu negocio?" options={stages} />;
     case "description":
       return <TextField {...props} label="Cuéntanos qué comidas o bebidas ofrecerás y cómo atenderás a tus clientes." hint="Ejemplo: prepararé desayunos, café y postres para consumir en el local y para llevar." maxLength={500} />;
     case "mode":
-      return <ChoiceField {...props} label="¿Cómo ofrecerás principalmente tus comidas o bebidas?" hint="Elige la modalidad principal. Si también atiendes de otras maneras, indícalo en tu descripción." options={modes} />;
+      return <ChoiceField {...props} label="¿Dónde prepararás o venderás principalmente tus productos?" options={modes.filter(([key]) => key !== "recojo" && key !== "eventos" || key === draft.mode)} />;
     case "fixedPlace":
       return <ChoiceField {...props} label="¿Tienes o tendrás un local fijo para preparar, almacenar o vender?" options={choices} compact />;
     case "onlineOrders":
@@ -381,9 +394,10 @@ function Question({ draft, ...props }: QuestionProps) {
       return <ChoiceField {...props} label="¿El local ya tiene licencia de funcionamiento?" options={choices} compact />;
     case "itse":
       return <ChoiceField {...props} label="¿El local ya tiene certificado ITSE?" hint="ITSE es la Inspección Técnica de Seguridad en Edificaciones." options={choices} compact />;
-    case "salesOrigin":
     case "purchasesOrigin":
-      return <ChoiceField {...props} label={props.id === "salesOrigin" ? "¿De dónde salen tus cifras de ventas?" : "¿De dónde salen tus cifras de compras?"}
+      return null;
+    case "salesOrigin":
+      return <ChoiceField {...props} label="¿De dónde salen tus cifras de ventas?"
         options={isPlanning(draft.stage) ? origins.slice(1) : origins} />;
     case "nrusRestriction":
     case "rerRestriction": {
@@ -404,14 +418,14 @@ function Question({ draft, ...props }: QuestionProps) {
     case "name":
       return <TextField {...props} label="Nombre del restaurante (opcional)" maxLength={100} />;
     case "regime":
-      return <SelectField {...props} label="¿En qué régimen estás inscrito?" hint="Consúltalo en tu ficha RUC. Puedes continuar si no lo sabes.">
+      return <SelectField {...props} label="¿En qué régimen tributario estás inscrito?" hint="Consúltalo en tu ficha RUC. Puedes continuar si no lo sabes.">
         <option value="">Elige una opción</option>
         {regimes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
       </SelectField>;
     case "activity":
       return <ChoiceField {...props} label="¿A qué se dedica principalmente tu negocio?" options={activities} />;
     case "legal":
-      return <ChoiceField {...props} label={isPlanning(draft.stage) ? "¿Cómo planeas operar?" : "¿Operas a tu nombre o como empresa?"} options={registration} />;
+      return <ChoiceField {...props} label="¿Cómo quieres registrar tu negocio?" hint="A tu nombre operas como persona natural. Como empresa, el negocio tiene identidad jurídica propia." options={registration} />;
     case "invoice":
       return <ChoiceField {...props} label="¿Necesitarás emitir facturas a tus clientes?" hint="Por ejemplo, si venderás almuerzos a empresas que necesitan una factura para sustentar sus gastos." options={choices} compact />;
     case "foreignBranch":
@@ -426,7 +440,7 @@ function Question({ draft, ...props }: QuestionProps) {
   }
 }
 
-function Review({ draft, visible, edit }: { draft: AssessmentDraft; visible: AssessmentField[]; edit: (field: AssessmentField) => void }) {
+function Review({ draft, visible, edit, open, setOpen }: { draft: AssessmentDraft; visible: AssessmentField[]; edit: (field: AssessmentField) => void; open: Record<number, boolean>; setOpen: (index: number, value: boolean) => void }) {
   const options = { activity: activities, legal: registration, regime: regimes, invoice: choices, linkage: choices, foreignBranch: choices,
     establishment: establishments, onlineOrders: choices, smoke: choices, constituted: choices, stage: stages, salesOrigin: origins, purchasesOrigin: origins, mode: modes, customers, risk: risks,
     fixedPlace: choices, rucStatus: choices, workforce: choices, domicile: choices, priorRmt: choices, license: choices, itse: choices, nrusRestriction: choices, rerRestriction: choices };
@@ -446,11 +460,9 @@ function Review({ draft, visible, edit }: { draft: AssessmentDraft; visible: Ass
 
   return <div className="grid gap-5">
     {assessmentFields.slice(0, reviewStep).map((group, index) => {
-      const fields = group.filter((field) => visible.includes(field));
+      const fields = group.filter((field) => visible.includes(field) && !(routeAssessmentFields as readonly AssessmentField[]).includes(field));
       if (!fields.length) return null;
-      return <section key={steps[index].label} className="rounded-lg border border-border p-4">
-        <h3 className="mb-2 font-bold">{steps[index].label}</h3>
-        <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      const rows = <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {fields.map((field) => <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50/60 p-4" key={field}>
             <dt className="text-sm text-muted-foreground">{assessmentFieldLabels[field]}</dt>
             <dd className="col-start-1 row-start-2 min-w-0 break-words font-semibold">{value(field) || "Sin indicar"}</dd>
@@ -458,7 +470,16 @@ function Review({ draft, visible, edit }: { draft: AssessmentDraft; visible: Ass
               <Button id={"change-" + field} type="button" variant="ghost" aria-label={"Cambiar " + assessmentFieldLabels[field].toLowerCase()} onClick={() => edit(field)}>Cambiar</Button>
             </dd>
           </div>)}
-        </dl>
+        </dl>;
+      if (index > 0) return <details key={steps[index].label} open={open[index] ?? false} onToggle={(event) => {
+        if (event.currentTarget.open !== Boolean(open[index])) setOpen(index, event.currentTarget.open);
+      }} className="rule-details rounded-lg border border-border p-4">
+        <summary className="font-bold">{index === 1 ? "Cifras para afinar el diagnóstico (opcional)" : "Verificaciones tributarias (opcional)"}</summary>
+        <div className="mt-3">{rows}</div>
+      </details>;
+      return <section key={steps[index].label} className="rounded-lg border border-border p-4">
+        <h3 className="mb-2 font-bold">{steps[index].label}</h3>
+        {rows}
       </section>;
     })}
   </div>;
