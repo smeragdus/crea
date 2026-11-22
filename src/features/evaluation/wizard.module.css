@@ -89,13 +89,6 @@
 
 main:has(.background) + :global(.site-footer) { display: none; }
 
-body:has(.background) :global(.crea-cloud-trigger) {
-  border-color: #93b8eb;
-  background: #edf5ff;
-  color: #10295b;
-}
-body:has(.background) :global(.crea-cloud-icon) { color: #1464f6; }
-
 @media (min-width: 1366px) and (max-width: 1540px) {
   .form :global(.wizard-actions) { padding-inline-end: 3rem; }
 }
