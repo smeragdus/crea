@@ -99,7 +99,7 @@ test("inicio, validación, revisión y diagnóstico con datos completos", async 
   await expect(page.getByRole("heading", { name: "Resultados del simulador" })).toBeFocused();
   await expect(page.getByText("Escenario orientativo con IGV de ventas de 10.5 %", { exact: false })).toBeVisible();
 
-  await page.getByRole("link", { name: "Obligaciones", exact: true }).click();
+  await page.getByRole("link", { name: "Mis obligaciones", exact: true }).click();
   await expect(page.getByLabel("Periodo tributario")).toBeVisible();
   await expect(page.getByLabel("Último dígito del RUC")).toBeHidden();
   await page.getByText("Consultar vencimiento", { exact: true }).click();

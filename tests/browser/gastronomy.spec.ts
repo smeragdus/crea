@@ -60,6 +60,10 @@ test("una idea puede proyectar ventas sin RUC y guardar su ruta", async ({ page 
   await expect(page.getByRole("heading", { name: "Tu escenario antes de abrir" })).toBeVisible();
   await expect(page.getByText("Proyectadas", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Ver mi ruta de formalización" }).click();
+  const overview = page.getByRole("region", { name: "Tu orientación inicial, paso a paso" });
+  await expect(page.getByRole("heading", { name: "Mi ruta de formalización", exact: true })).toBeVisible();
+  await expect(overview.getByRole("link", { name: /Ver código 5610 en el INEI/ })).toBeVisible();
+  await expect(overview.getByRole("link", { name: /Consultar en SUNAT/ })).toBeVisible();
   await page.getByRole("checkbox", { name: "Definir la forma de operar" }).check();
   await expect(page.getByText(/1 de \d+ tareas marcadas/)).toBeVisible();
   await page.reload();
@@ -68,7 +72,7 @@ test("una idea puede proyectar ventas sin RUC y guardar su ruta", async ({ page 
   await page.getByRole("button", { name: /Abrir ejemplo: Cafetería en preparación/ }).click();
   await expect(page.getByText("Simulación con datos ficticios.")).toBeVisible();
   await page.getByRole("button", { name: "Salir del ejemplo" }).click();
-  await expect(page.getByText(/5610.*Actividades de restaurantes/)).toBeVisible();
+  await expect(page.getByText(/5610 · Actividades de restaurantes/)).toBeVisible();
 });
 
 for (const stage of ["Estoy preparando mi negocio", "Mi negocio ya funciona, pero necesito formalizarlo"]) {
@@ -103,7 +107,7 @@ test("los casos ficticios se abren con simulador y formalización", async ({ pag
   await page.getByRole("link", { name: "Probar con un ejemplo" }).click();
   await page.getByRole("button", { name: /Abrir ejemplo: Cafetería en preparación/ }).click();
   await expect(page.getByText("Simulación con datos ficticios.")).toBeVisible();
-  await expect(page.getByText(/5630.*Actividades de servicio de bebidas/)).toBeVisible();
+  await expect(page.getByText(/5630 · Actividades de servicio de bebidas/)).toBeVisible();
   await page.getByRole("link", { name: "Ir al simulador" }).click();
   await expect(page.getByLabel("Ventas del mes", { exact: true })).toHaveValue("4500");
   await page.getByRole("button", { name: "Calcular estimación" }).click();
@@ -139,7 +143,7 @@ test("conserva la sugerencia al recargar y solo cambia el diagnóstico al confir
   await fillPurchasesOrigin(page, "Todavía no tengo cifras");
   await advanceTo(page, "#name");
   await page.getByRole("button", { name: "Ver mi diagnóstico" }).click();
-  await expect(page.getByText(/5610.*Actividades de restaurantes/)).toBeVisible();
+  await expect(page.getByText(/5610 · Actividades de restaurantes/)).toBeVisible();
   await page.getByRole("link", { name: "Cambiar actividad", exact: true }).click();
   await page.getByRole("button", { name: "Corregir descripción" }).click();
   await expect(page.getByLabel("Descripción de tu negocio")).toHaveValue("Quiero vender pollo a la brasa en mi local y por delivery");
@@ -148,5 +152,5 @@ test("conserva la sugerencia al recargar y solo cambia el diagnóstico al confir
   await expect(page.getByText("CIIU sugerido 5621")).toBeVisible();
   await page.getByRole("button", { name: "Confirmar actividad" }).click();
   await page.getByRole("button", { name: "Guardar cambio" }).click();
-  await expect(page.getByText(/5621.*Suministro de comidas por encargo/)).toBeVisible();
+  await expect(page.getByText(/5621 · Suministro de comidas por encargo/)).toBeVisible();
 });

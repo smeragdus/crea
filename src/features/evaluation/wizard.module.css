@@ -46,7 +46,7 @@
   background: #f7faff;
 }
 .navigation li[aria-current="step"] > span { background: #1464f6; border-color: #1464f6; color: white; }
-.navigation li[data-complete="true"] > span { background: #047857; border-color: #047857; color: white; }
+.navigation li[data-complete="true"] > span { background: #0a4db7; border-color: #0a4db7; color: white; }
 
 .form { display: grid; gap: 1.75rem; margin-top: 2.5rem; }
 .counter { color: #475569; font-size: 1rem; }

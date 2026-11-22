@@ -1,6 +1,8 @@
-import { Utensils } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
-export function Brand() {
-  return <Link href="/" aria-label="CREA, inicio" className="brand"><span className="brand-mark"><Utensils size={19} strokeWidth={1.8} aria-hidden="true" /></span><span>crea<span className="brand-period">.</span></span></Link>;
+export function Brand({ inverse = false }: { inverse?: boolean }) {
+  return <Link href="/" aria-label="CREA, inicio" className="brand" data-inverse={inverse}>
+    <Image src="/crea-logo.png" alt="" width={2172} height={724} />
+  </Link>;
 }

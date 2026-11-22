@@ -1,10 +1,12 @@
 "use client";
 
-import { ArrowRight, FlaskConical, Save } from "lucide-react";
+import { CircleHelp, ClipboardCheck, FlaskConical, House, Route, Save, Store } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Brand } from "@/components/layout/brand";
+import { RouteOverview } from "./route-overview";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState, LinkButton, Notice, PageHeading } from "@/components/ui/primitives";
@@ -29,7 +31,7 @@ const Guides = dynamic(() => import("./guides").then((module) => module.Guides),
 
 const sections = [
   { key: "diagnostico", label: "Diagnóstico", title: "Tu diagnóstico" },
-  { key: "ruta", label: "Formalización", title: "Tu ruta de formalización" },
+  { key: "ruta", label: "Formalización", title: "Mi ruta de formalización" },
   { key: "obligaciones", label: "Obligaciones", title: "Organiza tus obligaciones" },
   { key: "simulador", label: "Simulador", title: "Simula tus impuestos" },
   { key: "reportes", label: "Reportes", title: "Tu reporte" },
@@ -73,7 +75,7 @@ function WorkspaceContent({ initialSection }: { initialSection: "diagnostico" | 
   const requested = search.get("restaurante");
   const saveIntent = search.get("guardar") === "1";
   const section = sections.find((item) => item.key === (search.get("seccion") ?? initialSection)) ?? sections[0];
-  const { user, mode } = useSession();
+  const { user, mode, signOut } = useSession();
   const unfinished = useUnfinishedAssessment();
   const uid = user?.uid;
   const ownerEmail = user?.emailVerified ? user.email : undefined;
@@ -219,15 +221,47 @@ function WorkspaceContent({ initialSection }: { initialSection: "diagnostico" | 
     }
   }
 
-  return <div className="container-site page-shell workspace-shell">
-    <div className="print-hidden">
-      <PageHeading headingRef={heading} title={!assessment && loaded && section.key === "diagnostico" ? "Mis evaluaciones" : section.title}
-        description={assessment ? assessment.context.businessName || undefined : undefined} />
-      <nav className="workspace-nav" aria-label="Herramientas de la evaluación">
-        {sections.filter(({ key }) => assessment || key === section.key || key === "diagnostico" || key === "obligaciones" || key === "orientacion" || key === "simulador" || key === "ejemplos")
-          .map(({ key, label }) => <Link key={key} href={base + "seccion=" + key} aria-current={section.key === key ? "page" : undefined}>{label}</Link>)}
+  const navigation = [
+    { key: "inicio", label: "Inicio", href: "/", icon: House },
+    { key: "diagnostico", label: "Mi empresa", href: base + "seccion=diagnostico", icon: Store },
+    { key: "ruta", label: "Mi ruta", href: base + "seccion=ruta", icon: Route },
+    { key: "obligaciones", label: "Mis obligaciones", href: base + "seccion=obligaciones", icon: ClipboardCheck },
+    { key: "orientacion", label: "Ayuda", href: base + "seccion=orientacion", icon: CircleHelp },
+  ];
+  const showOverview = assessment && (section.key === "ruta" || section.key === "diagnostico");
+
+  const toolsNavigation = <nav className="flex flex-wrap gap-x-5 gap-y-2 pb-5 text-sm font-bold text-primary" aria-label="Herramientas de la evaluación">
+            {sections.filter(({ key }) => !navigation.some((entry) => entry.key === key) && (assessment || key === section.key || key === "simulador" || key === "ejemplos"))
+              .map(({ key, label }) => <Link key={key} className="hover:underline aria-[current=page]:underline" href={base + "seccion=" + key} aria-current={section.key === key ? "page" : undefined}>{label}</Link>)}
+          </nav>;
+
+  return <div className="crea-workspace grid min-h-[85vh] bg-[#edf5fb] lg:grid-cols-[clamp(13rem,15vw,18rem)_minmax(0,1fr)]">
+    <aside className="print-hidden bg-[#142a46] px-4 py-5 text-white lg:sticky lg:top-0 lg:self-start lg:min-h-screen lg:px-6">
+      <Brand inverse />
+      <nav aria-label="Tu espacio de emprendimiento" className="mt-4 grid grid-cols-2 gap-1 sm:grid-cols-5 lg:mt-10 lg:grid-cols-1 lg:gap-2">
+        {navigation.map(({ key, label, href, icon: Icon }) =>
+          <Link key={key} href={href} aria-current={section.key === key ? "page" : undefined}
+            className="flex min-w-0 items-center gap-2 rounded-xl px-3 py-3 text-sm font-bold text-white hover:bg-white/15 aria-[current=page]:bg-[#0e58d0] lg:gap-4 lg:px-4 lg:py-4 lg:text-base">
+            <Icon className="size-5 shrink-0 lg:size-6" aria-hidden="true" />{label}
+          </Link>)}
       </nav>
-    </div>
+    </aside>
+    <div className="min-w-0">
+      <div className="print-hidden flex flex-wrap items-center justify-between gap-3 border-b border-blue-100 bg-white px-5 py-3 sm:px-8">
+        <p className="font-bold text-slate-700">Tu espacio de emprendimiento</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <LinkButton href="/negocios/nuevo" variant="outline" className="rounded-xl text-primary">{unfinished ? "Continuar evaluación en curso" : "Nueva evaluación"}</LinkButton>
+          {user && <Button variant="ghost" onClick={() => void signOut().catch(() => setFailure("No pudimos cerrar tu sesión. Intenta de nuevo."))}>Salir</Button>}
+        </div>
+      </div>
+      <div className="mx-auto w-full max-w-[79rem] px-5 pb-16 pt-7 sm:px-8">
+        <div className="print-hidden">
+          {showOverview && <p className="mb-2 text-sm font-bold uppercase text-primary sm:text-base">Restaurantes y servicios afines · {[assessment.context.district, assessment.context.province].filter(Boolean).join(", ")}</p>}
+          <PageHeading headingRef={heading} title={!assessment && loaded && section.key === "diagnostico" ? "Mis evaluaciones" : section.title}
+            description={section.key === "ruta" ? "Sigue los pasos que se activaron con tus respuestas." : undefined}
+            actions={assessment?.context.businessName && <span className="max-w-full break-words rounded-full border border-blue-100 bg-white px-4 py-2 text-sm font-bold shadow-sm">{assessment.context.businessName}</span>} />
+          {(section.key !== "ruta" || !assessment) && toolsNavigation}
+        </div>
       <div className="min-w-0 space-y-4">
         {failure && <div className="print-hidden"><Notice tone="error">{failure}</Notice>{uid && <Button variant="ghost" onClick={() => setRetry((value) => value + 1)}>Volver a cargar</Button>}</div>}
         {section.key === "orientacion" ? <Guides />
@@ -251,6 +285,8 @@ function WorkspaceContent({ initialSection }: { initialSection: "diagnostico" | 
           {assessment.demo && <div className="print-hidden flex flex-wrap items-center gap-2"><Notice tone="warning">Simulación con datos ficticios.</Notice>
             <Button variant="outline" onClick={() => setExample(null)}>Salir del ejemplo</Button>
           </div>}
+          {showOverview && <RouteOverview context={assessment.context} />}
+          {section.key === "ruta" && toolsNavigation}
           {section.key === "diagnostico" && <Results evaluation={evaluation} context={assessment.context} workspaceHref={base} prepareEdit={assessment.demo ? undefined : edit} />}
           {section.key === "diagnostico" && <div className="print-hidden grid gap-3">
             {!assessment.saved && !assessment.demo && <section ref={saveSection} tabIndex={-1} aria-label="Guardar tu evaluación">
@@ -285,6 +321,7 @@ function WorkspaceContent({ initialSection }: { initialSection: "diagnostico" | 
           {section.key === "crea-ia" && <Assistant key={assessment.id ?? assessment.date} context={assessment.context} evaluation={evaluation} />}
         </>}
       </div>
-    {assessment && section.key === "diagnostico" && <div className="print-hidden mt-6 border-t border-border pt-3"><Link className="hero-secondary" href="/negocios/nuevo">{unfinished ? "Continuar evaluación en curso" : "Nueva evaluación"} <ArrowRight size={16} aria-hidden="true" /></Link></div>}
+      </div>
+    </div>
   </div>;
 }

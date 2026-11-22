@@ -40,7 +40,7 @@ export function SiteHeader() {
     <a href="#contenido" className="skip-link">Saltar al contenido</a>
     <header className="bg-[#edf5fb] px-4 pt-5 font-[Arial,Helvetica,sans-serif] sm:px-8">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 rounded-t-[28px] border-b border-blue-100 bg-white px-6 py-5 sm:px-10">
-        <Link href="/" aria-label="CREA, inicio" className="text-4xl font-black tracking-tight text-[#0a318c]">Crea</Link>
+        <Brand />
         <nav aria-label="Navegación principal" className="flex gap-3 text-sm font-semibold text-[#0a4db7]">
           <Link href="/" className="rounded-xl px-4 py-3 hover:bg-blue-50">Inicio</Link>
           {authPage && !user ? <Link href={pathname === "/registro" ? "/ingresar" : "/registro"} className="rounded-xl bg-[#1464f6] px-4 py-3 text-white">
@@ -55,7 +55,7 @@ export function SiteHeader() {
     <a href="#contenido" className="skip-link">Saltar al contenido</a>
     <header className="bg-[#edf5fb] px-4 pt-5 font-[Arial,Helvetica,sans-serif] sm:px-6">
       <div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-4 rounded-t-[28px] bg-white px-6 py-6 sm:px-14">
-        <Link href="/" aria-label="CREA, inicio" className="text-4xl font-black tracking-tight text-[#0a318c] sm:text-5xl">Crea</Link>
+        <Brand />
         <nav aria-label="Navegación principal" className="order-last flex w-full flex-wrap items-center gap-x-5 gap-y-1 text-sm font-semibold text-slate-700 lg:order-none lg:w-auto lg:gap-8">
           <a href="#inicio" className="border-b-2 border-[#1464f6] py-3 text-[#071c56]">Inicio</a>
           <a href="#como-funciona" className="py-3 hover:text-[#0a4db7]">¿Cómo funciona?</a>

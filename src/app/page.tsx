@@ -36,7 +36,7 @@ export default function Home() {
           <p className="mt-7 max-w-xl text-lg leading-8 text-[#4b6186] sm:text-xl">Cuéntanos cómo prepararás y servirás tus comidas en Cajamarca, en local, para llevar, por delivery o desde un puesto móvil. Te ayudamos a entender los pasos, las entidades involucradas y las decisiones tributarias que debes revisar.</p>
           <ul className="mt-8 space-y-3">
             {highlights.map((text) => <li key={text} className="flex items-center gap-3 text-lg text-[#263e6b]">
-              <span aria-hidden="true" className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-100 font-bold text-emerald-700">✓</span>
+              <span aria-hidden="true" className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blue-100 font-bold text-[#0a4db7]">✓</span>
               {text}
             </li>)}
           </ul>
