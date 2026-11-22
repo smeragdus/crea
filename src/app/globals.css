@@ -228,3 +228,20 @@ body { padding-bottom: calc(5.25rem + env(safe-area-inset-bottom)); }
 }
 @media print { body { padding-bottom: 0; } }
 .route-intro { background: #e7efdc; color: #293d25; }
+
+
+.crea-auth-card {
+  --foreground: #071c56;
+  --card: #ffffff;
+  --card-foreground: #071c56;
+  --primary: #0e58d0;
+  --primary-hover: #0a4db7;
+  --muted: #f2f7ff;
+  --muted-foreground: #475569;
+  --accent: #e9f2ff;
+  --border: #dbeafe;
+  --input: #7b9abc;
+  --ring: #1464f6;
+}
+body:has(.crea-auth-page) { background: #edf5fb; }
+main:has(.crea-auth-page) + .site-footer { display: none; }

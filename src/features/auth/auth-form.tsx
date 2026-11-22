@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, KeyRound } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
@@ -8,7 +9,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { EmptyState, LinkButton, Notice, PageHeading } from "@/components/ui/primitives";
+import { EmptyState, LinkButton, Notice } from "@/components/ui/primitives";
 import { useSession } from "./session";
 
 const emailSchema = z.email();
@@ -98,13 +99,24 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       : destination === "/investigacion" ? "Usa la cuenta vinculada a tu participación en el estudio."
         : destination === "/admin" ? "Usa tu cuenta de administración del catálogo."
           : "Accede a tus evaluaciones guardadas desde otros dispositivos.";
-  return <div className="container-site page-shell">
-    <div className="mx-auto max-w-lg">
-      <PageHeading title={title} description={session.mode === "firebase" && !session.user ? intro : undefined} />
+  return <div className="crea-auth-page bg-[#edf5fb] px-4 pb-5 font-[Arial,Helvetica,sans-serif] text-[#071c56] sm:px-8">
+    <div className="mx-auto grid max-w-7xl gap-6 rounded-b-[28px] bg-white p-5 shadow-[0_20px_60px_#0b357518] sm:p-10 lg:grid-cols-2 lg:items-start">
+      <section className="order-last overflow-hidden rounded-3xl bg-[#e9f4ff] lg:order-first" aria-labelledby="auth-benefits">
+        <div className="relative h-40 sm:h-52">
+          <Image src="/cajamarca-plaza.jpg" alt="Plaza de Armas de Cajamarca" fill sizes="(min-width: 1024px) 45vw, 100vw" className="object-cover object-[center_62%]" />
+        </div>
+        <div className="p-6 sm:p-8">
+          <h2 id="auth-benefits" className="text-2xl font-black sm:text-3xl">Organiza la formalización de tu negocio</h2>
+          <p className="mt-3 max-w-md text-slate-600">Evalúa tu actividad gastronómica en Cajamarca, estima tus ventas y consulta tu ruta de formalización.</p>
+        </div>
+      </section>
+      <section className="crea-auth-card min-w-0 rounded-3xl border border-blue-100 bg-white p-6 sm:p-9" aria-labelledby="auth-title">
+        <h1 id="auth-title" className="mb-4 text-3xl font-black tracking-tight sm:text-4xl">{title}</h1>
+        {session.mode === "firebase" && !session.user && <p className="mb-5 text-muted-foreground">{intro}</p>}
         {session.loading ? <p role="status">Comprobando tu sesión…</p>
         : session.mode !== "firebase" ? <EmptyState title={session.mode === "demo" ? "Modo demostración" : "Cuentas sin conexión"}>
-          {session.mode === "demo" ? "Puedes explorar la evaluación y las guías sin una cuenta. Los datos de la prueba quedan en esta pestaña." : "El acceso a cuentas no está disponible. Puedes evaluar tu restaurante y consultar las guías en esta pestaña."}
-          {session.mode === "demo" && <div className="mt-3"><Link className="hero-secondary" href="/negocios">Explorar una evaluación de demostración</Link></div>}
+          {session.mode === "demo" ? "Esta vista previa usa el modo demostración. Puedes hacer una evaluación sin cuenta y tus respuestas se guardarán en esta pestaña." : "El acceso a cuentas no está disponible. Puedes evaluar tu restaurante y consultar las guías en esta pestaña."}
+          {session.mode === "demo" && <div className="mt-3"><Link className="inline-flex min-h-11 items-center font-bold text-primary underline underline-offset-4" href="/negocios">Explorar una evaluación de demostración</Link></div>}
         </EmptyState>
         : session.user ? <div className="grid justify-items-start gap-4"><p className="text-muted-foreground">Sesión activa con {session.user.email}.</p><LinkButton href={destination}>Continuar <ArrowRight aria-hidden="true" /></LinkButton></div>
         : <>
@@ -130,6 +142,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
             </div>}
           </div>
         </>}
+      </section>
     </div>
   </div>;
 }
