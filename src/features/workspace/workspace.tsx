@@ -251,7 +251,8 @@ function WorkspaceContent({ initialSection }: { initialSection: "diagnostico" | 
         <p className="font-bold text-slate-700">Tu espacio de emprendimiento</p>
         <div className="flex flex-wrap items-center gap-2">
           <LinkButton href="/negocios/nuevo" variant="outline" className="rounded-xl text-primary">{unfinished ? "Continuar evaluación en curso" : "Nueva evaluación"}</LinkButton>
-          {user && <Button variant="ghost" onClick={() => void signOut().catch(() => setFailure("No pudimos cerrar tu sesión. Intenta de nuevo."))}>Salir</Button>}
+          {user ? <Button variant="ghost" onClick={() => void signOut().catch(() => setFailure("No pudimos cerrar tu sesión. Intenta de nuevo."))}>Salir</Button>
+            : mode === "firebase" && <LinkButton href="/ingresar?volver=%2Fnegocios" variant="ghost">Ingresar</LinkButton>}
         </div>
       </div>
       <div className="mx-auto w-full max-w-[79rem] px-5 pb-16 pt-7 sm:px-8">
