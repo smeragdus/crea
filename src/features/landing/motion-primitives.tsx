@@ -128,31 +128,8 @@ export function HeroPhotoStage() {
               sizes="(max-width: 1023px) 100vw, 44vw"
             />
           </motion.div>
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#081636]/50 via-transparent to-transparent"
-          />
-          <figcaption className="absolute bottom-4 left-5 right-5 flex flex-wrap items-end justify-between gap-2 text-white/95 sm:bottom-6 sm:left-6 sm:right-6">
-            <span className="landing-serif text-base italic tracking-wide sm:text-lg">
-              Distrito de Cajamarca · Perú
-            </span>
-            <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#ffc400]">
-              CIIU 5610 · 5621 · 5630
-            </span>
-          </figcaption>
         </div>
       </motion.figure>
-
-      {/* Clean architectural caption ledger below photo */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.45, ease: EASE_OUT_EXPO }}
-        className="mt-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-[#ddd6c8] pt-3.5 text-xs font-bold text-[#52607a]"
-      >
-        <span>RUC SUNAT · Regímenes · Licencia Municipal e ITSE</span>
-        <span className="text-[#0a1a3c]">Actualizado 2026</span>
-      </motion.div>
     </div>
   );
 }

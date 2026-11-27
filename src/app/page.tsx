@@ -202,7 +202,7 @@ export default function Home() {
               </div>
 
               <p className="landing-reveal landing-reveal-d3 mt-3.5 text-xs font-bold text-[#52607a]">
-                Gratis · Toma unos 3 minutos · No necesitas crear cuenta para empezar
+                Gratis · Toma unos 3 minutos
               </p>
 
               <ul className="landing-reveal landing-reveal-d4 mt-9 space-y-3 border-t border-[#e5dfd3] pt-7">

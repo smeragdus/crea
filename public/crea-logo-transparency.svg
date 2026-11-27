@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <filter id="remove-white" color-interpolation-filters="sRGB">
+    <!-- The source logo has a nearly white background baked into its pixels. -->
+    <feComponentTransfer in="SourceGraphic" result="normalized">
+      <feFuncR type="linear" slope="1.02"/>
+      <feFuncG type="linear" slope="1.02"/>
+      <feFuncB type="linear" slope="1.02"/>
+    </feComponentTransfer>
+    <feColorMatrix in="normalized" result="red" values="1 0 0 0 0  1 0 0 0 0  1 0 0 0 0  0 0 0 1 0"/>
+    <feColorMatrix in="normalized" result="green" values="0 1 0 0 0  0 1 0 0 0  0 1 0 0 0  0 0 0 1 0"/>
+    <feColorMatrix in="normalized" result="blue" values="0 0 1 0 0  0 0 1 0 0  0 0 1 0 0  0 0 0 1 0"/>
+    <feBlend in="red" in2="green" mode="darken" result="min-red-green"/>
+    <feBlend in="min-red-green" in2="blue" mode="darken" result="white-level"/>
+    <feColorMatrix in="white-level" result="white-matte" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  1 0 0 0 0"/>
+    <!-- Subtract the white contribution from the premultiplied colors and alpha. -->
+    <feComposite in="normalized" in2="white-matte" operator="arithmetic" k2="1" k3="-1"/>
+  </filter>
+</svg>

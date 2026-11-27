@@ -68,7 +68,8 @@
 .site-header { background: rgba(250, 248, 244, 0.92); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); }
 .header-inner { min-height: 4.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; position: relative; }
 .brand { position: relative; display: block; width: 8.9rem; max-width: 100%; aspect-ratio: 3.5; overflow: hidden; }
-.brand img { position: absolute; max-width: none; width: 172%; height: auto; left: -37%; top: -48%; mix-blend-mode: multiply; }
+.brand img { position: absolute; max-width: none; width: 172%; height: auto; left: -37%; top: -48%; }
+.brand[data-inverse="false"] img { filter: url("/crea-logo-transparency.svg#remove-white"); }
 .brand[data-inverse="true"] img { clip-path: inset(0 27% 0 0); filter: grayscale(1) invert(1) contrast(4); mix-blend-mode: screen; }
 .brand[data-inverse="true"]::after { content: ""; position: absolute; width: 8%; aspect-ratio: 1; border-radius: 100%; background: #ffc400; right: 1%; bottom: 4%; }
 .site-menu { align-items: center; justify-content: space-between; flex: 1; gap: 1.25rem; display: flex; }
